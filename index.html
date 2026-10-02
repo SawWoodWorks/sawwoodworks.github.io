@@ -289,6 +289,7 @@ function attachData(first) {
       if (first) { V.view = (!isRoot() && !DU.lhLocked) ? 'letterhead' : 'projects'; render(); termsGate(); } else render();
     } else softRender();
   }, e => toast('Server error: ' + e.code)));
+  dataSubs.push(F.onSnapshot(F.doc(db, 'config/ai'), snap => { CAI = snap.exists() ? snap.data() : {}; if (gotUser && V.view === 'settings') softRender(); }, () => { CAI = {}; }));
   dataSubs.push(F.onSnapshot(F.doc(db, 'users/' + u + '/meta/letterhead'), snap => { LH = snap.exists() ? snap.data() : null; if (!LHD || V.view !== 'letterhead') LHD = null; renderHeader(); if (gotUser) softRender(); }, () => {}));
   dataSubs.push(F.onSnapshot(F.collection(db, 'users/' + u + '/projects'), qs => {
     qs.docChanges().forEach(ch => {
@@ -1353,7 +1354,7 @@ function tabPhotos(r) {
       <button ${!r.photos.length || V.busy ? 'disabled' : ''} onclick="aiRead()">${V.busy ? '<span class="spinner"></span> Reading photos…' : '✨ Read photos with AI'}</button>
       <button onclick="go('room',{tab:'room'})">Skip — fill in by hand →</button>
     </div>
-    ${!hasKey ? `<div class="msg warn small">AI reading needs a free Google Gemini key — add it under <a href="#" onclick="go('settings');return false">Settings</a>. You can still fill everything in by hand.</div>` : ''}
+    ${!hasKey ? `<div class="msg warn small">${CLOUD && !isRoot() ? 'AI photo reading has not been switched on yet — ask the administrator.' : `AI reading needs a free Google Gemini key — add it under <a href="#" onclick="go('settings');return false">Settings</a>.`} You can still fill everything in by hand.</div>` : ''}
     ${V.aiMsg ? `<div class="msg ${V.aiMsg.startsWith('✔') ? 'ok' : 'bad'}">${esc(V.aiMsg)}</div>` : ''}
     ${r.ai && r.ai.notes ? `<div class="msg ai"><b>AI notes:</b> ${esc(r.ai.notes)}</div>` : ''}
   </div>
@@ -1382,13 +1383,22 @@ async function addPhotos(files) {
 function delPhoto(i) { const x = R().photos.splice(i, 1)[0]; if (CLOUD && typeof x === 'string' && x.startsWith('ph:')) { delete PHOTOS[x.slice(3)]; FB.F.deleteDoc(FB.F.doc(FB.db, cpath('photos', x.slice(3)))).catch(fbErr); } touch(); render(); }
 
 /* AI — Google Gemini (free tier) or Anthropic Claude (paid) */
-const aiKey = () => (S.settings.provider === 'anthropic' ? S.settings.apiKey : S.settings.geminiKey || '').trim();
+/* In the shared (Firebase) app one company Gemini key, set by root, is used by everyone: config/ai {key, model}. */
+let CAI = {};
+const aiProvider = () => CLOUD ? 'gemini' : (S.settings.provider || 'gemini');
+const aiKey = () => (CLOUD ? CAI.key || '' : S.settings.provider === 'anthropic' ? S.settings.apiKey : S.settings.geminiKey || '').trim();
+const aiModel = () => CLOUD ? CAI.model || '' : S.settings.model;
+function setAiModel(m) { if (CLOUD) { CAI.model = m; if (isRoot()) FB.F.setDoc(FB.F.doc(FB.db, 'config/ai'), { model: m }, { merge: true }).catch(fbErr); } else { S.settings.model = m; save(); } }
+function saveCompanyKey(v) {
+  v = (v || '').trim(); CAI.key = v; CAI.model = '';
+  FB.F.setDoc(FB.F.doc(FB.db, 'config/ai'), { key: v, model: '' }, { merge: true }).then(() => toast(v ? 'Company AI key saved — every user can now read photos.' : 'Company AI key removed.')).catch(fbErr);
+}
 function apiHeaders() { return { 'content-type':'application/json', 'x-api-key':S.settings.apiKey.trim(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' }; }
-const gHeaders = () => ({ 'content-type':'application/json', 'x-goog-api-key': (S.settings.geminiKey||'').trim() });
+const gHeaders = () => ({ 'content-type':'application/json', 'x-goog-api-key': aiKey() });
 async function pickModel(force) {
-  if (S.settings.model && !force) return S.settings.model;
+  if (aiModel() && !force) return aiModel();
   let m;
-  if (S.settings.provider === 'anthropic') {
+  if (aiProvider() === 'anthropic') {
     const r = await fetch('https://api.anthropic.com/v1/models?limit=50', { headers: apiHeaders() });
     const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
     const ids = (j.data || []).map(x => x.id);
@@ -1404,11 +1414,11 @@ async function pickModel(force) {
     m = ok[0];
   }
   if (!m) throw new Error('No suitable model available on this key.');
-  S.settings.model = m; save(); return m;
+  setAiModel(m); return m;
 }
 async function aiRead() {
   const r = R();
-  if (!aiKey()) { V.aiMsg = 'Add your free Google Gemini key in Settings first.'; return render(); }
+  if (!aiKey()) { V.aiMsg = CLOUD ? (isRoot() ? 'Add the company Google Gemini key in Settings → AI photo reading first.' : 'AI photo reading has not been switched on yet — ask the administrator. You can still type the sizes in by hand.') : 'Add your free Google Gemini key in Settings first.'; return render(); }
   V.busy = true; V.aiMsg = ''; render();
   try {
     const model = await pickModel();
@@ -1422,7 +1432,7 @@ Reply with ONLY JSON, no other text, in this shape:
     const photos = r.photos.map(photoSrc).filter(Boolean).slice(0, 8).map(d => d.split(',')[1]);
     if (!photos.length) throw new Error('photos are still loading — try again in a moment');
     let txt = '';
-    if (S.settings.provider === 'anthropic') {
+    if (aiProvider() === 'anthropic') {
       const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers: apiHeaders(),
         body: JSON.stringify({ model, max_tokens: 3000, messages:[{ role:'user', content:[...photos.map(data => ({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data } })), { type:'text', text:prompt }] }] }) });
       const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
@@ -1601,16 +1611,16 @@ function viewSettings() {
       <td><button class="small danger" onclick="delMat(${i})">✕</button></td></tr>`).join('')}</table></div>
     <button class="small" style="margin-top:8px" onclick="S.settings.materials.push({id:uid(),name:'New board',L:2750,W:1830,kerf:4,trim:10,rotate:true});save();render()">+ Add material</button>
     <div class="row" style="margin-top:10px">${['carcass','doors','backs'].map(role => `<div><label>Default ${role === 'backs' ? 'backs' : role} board</label><select onchange="S.settings.roles['${role}']=this.value;save()">${s.materials.map(m => `<option value="${m.id}" ${s.roles[role]===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>`).join('')}</div></div>
-  <div class="card"><h3 style="margin-top:0">AI photo reading</h3>
+  ${CLOUD ? aiCompanyCard() : `<div class="card"><h3 style="margin-top:0">AI photo reading</h3>
     <div class="row"><div><label>AI service</label><select onchange="S.settings.provider=this.value;S.settings.model='';save();render()">
       <option value="gemini" ${s.provider!=='anthropic'?'selected':''}>Google Gemini — free</option>
       <option value="anthropic" ${s.provider==='anthropic'?'selected':''}>Anthropic Claude — paid</option></select></div></div>
     ${s.provider !== 'anthropic' ? `<p class="small muted">Free key: go to <b>aistudio.google.com</b>, sign in with a Google account, click <b>Get API key → Create API key</b>, and paste it below. No card needed. The free tier has a daily limit, and Google may use free-tier photos to improve its products.</p>
-    <div class="row"><div style="flex:1;min-width:240px"><label>Google Gemini API key</label><input type="password" style="width:100%" value="${esc(s.geminiKey||'')}" placeholder="AIza…" onchange="S.settings.geminiKey=this.value.trim();S.settings.model='';save()"></div>`
+    <div class="row"><div style="flex:1;min-width:240px"><label>Google Gemini API key</label><input type="password" style="width:100%" value="${esc(s.geminiKey||'')}" placeholder="Paste your key here (starts with AQ. or AIza)" onchange="S.settings.geminiKey=this.value.trim();S.settings.model='';save()"></div>`
     : `<p class="small muted">Get a key at console.anthropic.com — usage is billed to that account.</p>
     <div class="row"><div style="flex:1;min-width:240px"><label>Anthropic API key</label><input type="password" style="width:100%" value="${esc(s.apiKey)}" placeholder="sk-ant-…" onchange="S.settings.apiKey=this.value.trim();S.settings.model='';save()"></div>`}
     <div><label>Model</label><input value="${esc(s.model)}" placeholder="auto" onchange="S.settings.model=this.value.trim();save()" style="width:220px"></div>
-    <button onclick="testKey()">Test key</button></div><div class="small muted">Keys are stored only on this device.</div><div id="keyMsg"></div></div>
+    <button onclick="testKey()">Test key</button></div><div class="small muted">Keys are stored only on this device.</div><div id="keyMsg">${V.keyMsg || ''}</div></div>`}
   ${!CLOUD ? libraryUploadCard() : ''}
   <div class="card"><h3 style="margin-top:0">Backup</h3><div class="row">
     <button onclick="exportData()">⬇ Download backup</button>
@@ -1627,10 +1637,22 @@ function delMat(i) {
   Object.keys(S.settings.roles).forEach(k => { if (S.settings.roles[k] === m.id) S.settings.roles[k] = first; });
   save(); render();
 }
+function aiCompanyCard() {
+  if (!isRoot()) return `<div class="card"><h3 style="margin-top:0">AI photo reading</h3>
+    ${CAI.key ? '<p class="small" style="margin:0">✅ Switched on for you by the administrator. Open a room → Photos → <b>Read photos with AI</b>.</p>'
+      : '<p class="small muted" style="margin:0">Not switched on yet — the administrator sets this up for everyone. You can still type sizes in by hand.</p>'}</div>`;
+  return `<div class="card"><h3 style="margin-top:0">AI photo reading — company key</h3>
+    <p class="small muted">One Google Gemini key for the whole company. Every user's photo reading runs on it. Users never see this box and cannot add or change keys. Free key: <b>aistudio.google.com</b> → <b>Get API key</b>.</p>
+    <div class="row"><div style="flex:1;min-width:240px"><label>Company Google Gemini API key ${CAI.key ? '<span style="color:var(--ok)">● saved</span>' : '<span style="color:var(--warn)">● not set</span>'}</label>
+      <input type="password" style="width:100%" value="${esc(CAI.key || '')}" placeholder="Paste the key here (starts with AQ. or AIza)" onchange="saveCompanyKey(this.value)"></div>
+      <div><label>Model</label><input value="${esc(CAI.model || '')}" placeholder="auto" onchange="setAiModel(this.value.trim())" style="width:220px"></div>
+      <button onclick="testKey()">Test key</button></div><div id="keyMsg">${V.keyMsg || ''}</div></div>`;
+}
 async function testKey() {
   const el = $('#keyMsg'); el.innerHTML = '<span class="spinner"></span> Checking…';
-  try { const m = await pickModel(true); render(); $('#keyMsg').innerHTML = `<div class="msg ok">Key works. Using model ${esc(m)}.</div>`; }
-  catch (e) { el.innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+  try { const m = await pickModel(true); V.keyMsg = `<div class="msg ok">Key works. Using model ${esc(m)}.</div>`; }
+  catch (e) { V.keyMsg = `<div class="msg bad">${esc(e.message)}</div>`; }
+  render(); setTimeout(() => { V.keyMsg = ''; }, 100);
 }
 function exportData() {
   const blob = new Blob([JSON.stringify({ app:'S.A.W Woodworks', v:1, at:new Date().toISOString(), data: { ...S, settings: { ...S.settings, apiKey:'', geminiKey:'' } } })], { type:'application/json' });
