@@ -583,7 +583,7 @@ function viewLibrary() {
   if (tab === 'plans') body = `<div class="card"><div class="tablewrap"><table><tr><th>Cutting plan</th><th>Sheets</th><th>Parts</th></tr>${LIBX.plans.filter(f).map(x => `<tr style="cursor:pointer" onclick="openLibItem('${x.id}')"><td><b>${esc(x.name)}</b></td><td>${x.ns}</td><td>${x.np}</td></tr>`).join('')}</table></div></div>`;
   if (tab === 'tpl') { const G = LIBX.groups || {}, gname = g => (G[g] ? (G[G[g].parent] && G[g].parent !== '1' ? G[G[g].parent].name + ' › ' : '') + G[g].name : 'Other');
     const by = {}; (LIBX.templates || []).filter(f).forEach(t => (by[gname(t.group)] = by[gname(t.group)] || []).push(t));
-    body = Object.keys(by).sort().map(g => `<h3>${esc(g)} (${by[g].length})</h3><div class="card"><div class="tablewrap"><table><tr><th>Cabinet</th><th>W × H × D</th><th>Parts</th></tr>${by[g].slice(0, 300).map(t => `<tr style="cursor:pointer" onclick="openLibItem('${t.id}')"><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td><td class="small">${t.np}</td></tr>`).join('')}</table></div></div>`).join('') || '<p class="muted">No matches.</p>'; }
+    body = Object.keys(by).sort().map(g => `<h3>${esc(g)} (${by[g].length})</h3><div class="card"><div class="tablewrap"><table><tr><th></th><th>Cabinet</th><th>W × H × D</th><th>Parts</th></tr>${by[g].slice(0, 300).map(t => `<tr style="cursor:pointer" onclick="openLibItem('${t.id}')"><td style="width:70px">${t.lk ? cabinetFrontSVG(t.X || 600, t.Y || 720, t.lk, tplZone(t), '', { maxH:60 }) : ''}</td><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td><td class="small">${t.np}</td></tr>`).join('')}</table></div></div>`).join('') || '<p class="muted">No matches.</p>'; }
   if (tab === 'prices') { if (LIBX.imgChunks && !LIBC['_c' + LIBX.imgChunks[0]]) setTimeout(libImages, 0);
     body = `<h3>Board materials</h3><div class="card"><div class="tablewrap"><table><tr><th></th><th>Material</th><th>Code</th><th>Sheet</th><th>Kerf</th><th>Grain</th><th>Price / m²</th><th>≈ per sheet</th></tr>${LIBX.materials.filter(f).map(m => `<tr><td>${libImg(m.img) ? `<img src="${libImg(m.img)}" style="width:36px;height:24px;object-fit:cover;border-radius:3px">` : ''}</td><td><b>${esc(m.name)}</b></td><td>${esc(m.code)}</td><td>${m.L} × ${m.W}</td><td>${m.kerf}</td><td>${m.rotate ? '' : 'yes'}</td><td>R ${(+m.price).toFixed(2)}</td><td>R ${sheetPrice(+m.price, m).toFixed(2)}</td></tr>`).join('')}</table></div></div>
     <h3>Edge banding</h3><div class="card"><div class="tablewrap"><table><tr><th>Code</th><th>Name</th><th>Price / m</th></tr>${(LIBX.edgeList || []).filter(f).map(e => `<tr><td>${esc(e.code)}</td><td>${esc(e.name)}</td><td>R ${(+e.price).toFixed(2)}</td></tr>`).join('')}</table></div></div>
@@ -631,10 +631,14 @@ function viewLibItem() {
     return head + `<div class="card noprint"><div class="row">${libImg(it.img) ? `<img src="${libImg(it.img)}" style="height:70px;border-radius:6px">` : ''}
       ${[['W','Width'],['H','Height'],['D','Depth']].map(([k, l]) => `<div><label>${l}</label><input type="number" value="${d[k]}" onchange="V.tplDim=Object.assign({},V.tplDim||{W:${it.X},H:${it.Y},D:${it.Z}},{${k}:num(this.value)||0});render()"></div>`).join('')}
       <span class="small muted">Change the size and every part recalculates, like in Optimik. To use it, open a room → Cupboards → "+ Optimik cabinet".</span></div></div>
+      <h2>Front view</h2><div class="card"><div class="svgbox" style="max-width:420px">${cabinetFrontSVG(d.W, d.H, tplLook(it), tplZone(it), it.name)}</div></div>
       <h2>Parts at ${d.W} × ${d.H} × ${d.D}</h2>${partsTable(parts.map(p => ({ ...p, grp:it.name })), 'grp', 'Cabinet')}${edgeTable(parts)}${itemsTable(it.items)}
+      ${partDrawings(parts.map(p => ({ ...p, grp:it.name })), 'grp')}
       <h2>Boards needed</h2>${boardsSummary(packs)}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`; }
   const parts = it.parts.map(libPartObj), packs = packAll(parts.map(p => ({ ...p, ref:p.set || 'Parts', role:'carcass' })), libMat);
-  return head + `<h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}<h2>Cut list</h2>${partsTable(parts, 'set', 'Cabinet / set')}${itemsTable(it.items)}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`;
+  return head + `<div class="msg warn small noprint">The old Optimik program only kept the parts list for each job — it never stored a room drawing or which cupboard each part came from. So below you get every part drawn to scale with its edging, plus the cutting layouts. To get room and cupboard drawings, copy it to your projects and add the cupboards to the walls (the Optimik cabinet templates can be dropped in).</div>
+    <h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}<h2>Cut list</h2>${partsTable(parts, 'set', 'Cabinet / set')}${itemsTable(it.items)}
+    ${partDrawings(parts, 'set')}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`;
 }
 function copyLibItem() {
   const ent = libEntry(V.lib), it = V.libItem; if (!it) return;
@@ -657,14 +661,14 @@ async function openTplPicker() {
 function tplPickerRender() {
   const q = V.tplQ.toLowerCase(), list = LIBX.templates.filter(t => !q || t.name.toLowerCase().includes(q)).slice(0, 60);
   modal(`<h2 style="margin-top:0">Add an Optimik cabinet</h2><input id="tplQ" placeholder="Search e.g. 600, drawer, pantry, BIC…" style="width:100%" value="${esc(V.tplQ)}" oninput="V.tplQ=this.value;clearTimeout(window._tq);window._tq=setTimeout(()=>{tplPickerRender();const i=$('#tplQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)">
-    <div style="max-height:50vh;overflow:auto;margin-top:8px"><table>${list.map(t => `<tr style="cursor:pointer" onclick="insertTpl('${t.id}')"><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td></tr>`).join('') || '<tr><td class="muted">No matches.</td></tr>'}</table></div>
+    <div style="max-height:50vh;overflow:auto;margin-top:8px"><table>${list.map(t => `<tr style="cursor:pointer" onclick="insertTpl('${t.id}')"><td style="width:60px">${t.lk ? cabinetFrontSVG(t.X || 600, t.Y || 720, t.lk, tplZone(t), '', { maxH:50 }) : ''}</td><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td></tr>`).join('') || '<tr><td class="muted">No matches.</td></tr>'}</table></div>
     <div class="row" style="margin-top:10px"><button onclick="modal('')">Cancel</button></div>`);
 }
 async function insertTpl(id) {
   const t = await libItem(id); if (!t) return;
   const w = curWall(), zone = tplZone(t);
   const u = { id:uid(), type:'tpl', zone, tpl:{ name:t.name, parts:t.parts, items:t.items }, w:t.X || 600, h:t.Y || 720, d:t.Z || 560, x:0,
-    elev: zone === 'upper' ? R_().wallElev : 0, doors:0, shelves:0, drawers:0, status:'new' };
+    elev: zone === 'upper' ? R_().wallElev : 0, ...tplLook(t), status:'new' };
   u.x = laneEnd(w, u);
   addLibMaterials(tplParts(t, u.w, u.h, u.d).map(p => p.matId)); addLibEdges(tplParts(t, u.w, u.h, u.d).map(p => p.edges));
   w.units.push(u); V.sel = u.id; modal(''); touch(); render();
@@ -685,7 +689,7 @@ async function uploadLibrary(f) {
   const add = (key, val) => { const s = JSON.stringify(val).length; if (size + s > 700000) { chunks.push({}); size = 0; } chunks[chunks.length - 1][key] = val; size += s; return chunks.length - 1; };
   lib.plans.forEach(x => { const n = add(x.id, x); index.plans.push({ id:x.id, name:x.name, ns:x.sheets.length, np:x.sheets.reduce((a, s) => a + s.parts.length, 0), chunk:n }); });
   lib.jobs.forEach(x => { const n = add(x.id, x); index.jobs.push({ id:x.id, name:x.name, date:x.date, np:x.parts.length, chunk:n }); });
-  (lib.templates || []).forEach(x => { const n = add(x.id, x); index.templates.push({ id:x.id, name:x.name, group:x.group, X:x.X, Y:x.Y, Z:x.Z, np:x.parts.length, chunk:n }); });
+  (lib.templates || []).forEach(x => { const n = add(x.id, x); index.templates.push({ id:x.id, name:x.name, group:x.group, X:x.X, Y:x.Y, Z:x.Z, np:x.parts.length, chunk:n, lk:tplLook(x) }); });
   chunks.push({}); size = 0; const first = chunks.length - 1;
   Object.entries(lib.images || {}).forEach(([k, v]) => add('img:' + k, v));
   for (let i = first; i < chunks.length; i++) index.imgChunks.push(i);
@@ -707,7 +711,8 @@ function loosePartsCard(r) {
     ${['L','W','qty'].map(k => `<td><input type="number" value="${p[k]}" style="width:${k === 'qty' ? 60 : 80}px" onchange="setLoose(${i},'${k}',num(this.value)??0)"></td>`).join('')}
     <td><select onchange="setLoose(${i},'matId',this.value)">${mats.map(m => `<option value="${m.id}" ${p.matId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}${mats.some(m => m.id === p.matId) ? '' : '<option selected>(missing)</option>'}</select></td>
     <td class="small">${esc(edgeText(p.edges))}</td><td><button class="small danger" onclick="R().parts.splice(${i},1);touch();render()">✕</button></td></tr>`).join('')}</table></div>` : ''}
-  <button class="small noprint" style="margin-top:8px" onclick="addLoose()">+ Add part</button></div>`;
+  <button class="small noprint" style="margin-top:8px" onclick="addLoose()">+ Add part</button></div>
+  ${ps.length ? `<details><summary class="noprint" style="cursor:pointer;margin:6px 0">Show part drawings</summary>${partDrawings(ps.map(p => ({ ...p, qty:+p.qty })), 'set')}</details>` : ''}`;
 }
 function roomItems(r) { const all = (r.items || []).slice(); r.walls.forEach(w => w.units.forEach(u => { if (u.type === 'tpl' && u.status !== 'keep' && u.status !== 'ask') all.push(...(u.tpl.items || [])); }));
   const m = {}; all.forEach(s => { const [n, q] = s.split('|'); m[n] = (m[n] || 0) + (+q || 1); }); return Object.entries(m).map(([n, q]) => n + '|' + q); }
@@ -811,6 +816,50 @@ function pricesCard() {
     <h3>Hardware &amp; other items</h3><table><tr><th>Item</th><th>Unit</th><th>Price</th><th></th></tr>${s.hardware.map((h, i) => `<tr><td>${inp(`S.settings.hardware[${i}].name`, h.name, 220, 'text')}</td><td>${inp(`S.settings.hardware[${i}].unit`, h.unit, 70, 'text')}</td><td>${inp(`S.settings.hardware[${i}].price`, h.price || 0)}</td><td><button class="small danger" onclick="S.settings.hardware.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table>
     <button class="small" onclick="S.settings.hardware.push({name:'New item',unit:'each',price:0});save();render()">+ Add item</button>
     <label style="margin-top:10px">Default notes / terms on quotes</label><textarea rows="3" style="width:100%" onchange="S.settings.quoteTerms=this.value;save()">${esc(s.quoteTerms ?? DEF_TERMS_Q)}</textarea></div>`;
+}
+
+/* ============ drawings for library items: cabinet fronts + part drawings ============ */
+function tplLook(tpl) {   // work out doors / drawers / shelves from an Optimik template's part names
+  let doors = 0, drawers = 0, shelves = 0;
+  (tpl.parts || []).forEach(s => { const [name, , , , , qty] = s.split('|'); const q = +qty || 1, n = name.toLowerCase();
+    if (/draw|laai/.test(n) && /front|deur|door/.test(n)) drawers += q;
+    else if (/deur|door/.test(n)) doors += q;
+    else if (/^\s*(rak|rakke|shel)/.test(n) || /adjustable shel|shelve$|shelves$/.test(n)) shelves += q; });
+  return { doors:Math.min(doors, 6), drawers:Math.min(drawers, 8), shelves };
+}
+function cabinetFrontSVG(w, h, look, zone, label, opts = {}) {
+  const Rl = R_(), kick = zone === 'upper' ? 0 : Rl.kick, H = h + kick, pad = Math.max(w, H) * 0.08, fs = Math.max(w, H) / 14;
+  const Y = z => H - z; let g = '';
+  if (kick) g += `<rect x="${w*0.03}" y="${Y(kick)}" width="${w*0.94}" height="${kick}" fill="#555"/>`;
+  g += `<rect x="0" y="${Y(kick + h)}" width="${w}" height="${h}" fill="var(--new)" stroke="#6b4a2e" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  const nd = look.doors, nr = look.drawers, dz = nr ? (nd ? h / 2 : h) : 0;
+  for (let i = 1; i < nr; i++) g += `<line x1="0" x2="${w}" y1="${Y(kick + h - dz*i/nr)}" y2="${Y(kick + h - dz*i/nr)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+  if (nr && nd) g += `<line x1="0" x2="${w}" y1="${Y(kick + h/2)}" y2="${Y(kick + h/2)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+  for (let i = 1; i < nd; i++) g += `<line x1="${w*i/nd}" x2="${w*i/nd}" y1="${Y(kick + h - dz)}" y2="${Y(kick)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+  if (nr) for (let i = 0; i < nr; i++) { const yc = Y(kick + h - dz*(i + 0.5)/nr); g += `<line x1="${w*0.4}" x2="${w*0.6}" y1="${yc}" y2="${yc}" stroke="#333" stroke-width="3" vector-effect="non-scaling-stroke"/>`; }
+  for (let i = 0; i < nd; i++) { const xh = nd === 1 ? w * 0.88 : (i % 2 ? w*i/nd + w/nd*0.12 : w*(i+1)/nd - w/nd*0.12), yh = Y(kick + (h - dz) * 0.75);
+    g += `<line x1="${xh}" x2="${xh}" y1="${yh - h*0.06}" y2="${yh + h*0.06}" stroke="#333" stroke-width="3" vector-effect="non-scaling-stroke"/>`; }
+  g += `<text x="${w/2}" y="${H + fs*1.3}" font-size="${fs*0.8}" text-anchor="middle">${r0(w)} × ${r0(h)}${label ? ' — ' + esc(label) : ''}</text>`;
+  return `<svg viewBox="${-pad} ${-pad} ${w + 2*pad} ${H + 2*pad + fs}" style="width:100%;max-height:${opts.maxH || 220}px">${g}</svg>`;
+}
+function partSVG(p) {
+  const L = +p.L, W = +p.W, s = 140 / Math.max(L, W, 1), w = Math.max(L * s, 6), h = Math.max(W * s, 6), e = (p.edges || '').split(','), fs = 11;
+  const ec = id => id && id !== '0' ? '#c0392b' : null;
+  const sides = [[0, 0, w, 0, e[0]], [0, h, w, h, e[1]], [0, 0, 0, h, e[2]], [w, 0, w, h, e[3]]];
+  let g = `<rect x="0" y="0" width="${w}" height="${h}" fill="var(--new)" stroke="#6b4a2e"/>`;
+  sides.forEach(([x1, y1, x2, y2, id]) => { if (ec(id)) g += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ec(id)}" stroke-width="4"/>`; });
+  const pm = libMat(p.matId);
+  if (pm && pm.rotate === false) g += `<line x1="${w*0.2}" y1="${h/2}" x2="${w*0.8}" y2="${h/2}" stroke="#6b4a2e88" stroke-width="1.5" marker-end="url(#ar)"/>`;
+  return `<div style="border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff;break-inside:avoid">
+    <svg viewBox="-34 -14 ${w + 48} ${h + 22}" style="width:100%;height:110px"><defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#6b4a2e88"/></marker></defs>${g}
+    <text x="${w/2}" y="-4" font-size="${fs}" text-anchor="middle" fill="#333">${L}</text><text x="-4" y="${h/2}" font-size="${fs}" text-anchor="end" dominant-baseline="middle" fill="#333">${W}</text></svg>
+    <div class="small"><b>${esc(p.name || 'Part')}</b> × ${p.qty}</div><div class="small muted">${esc((libMat(p.matId) || {}).name || '')}</div>
+    ${p.edges && p.edges.replace(/[0,]/g, '') ? `<div class="small" style="color:#c0392b">${esc(edgeText(p.edges))}</div>` : ''}</div>`;
+}
+function partDrawings(parts, groupKey) {
+  const groups = {}; parts.forEach(p => (groups[p[groupKey] || 'Parts'] = groups[p[groupKey] || 'Parts'] || []).push(p));
+  return `<h2>Part drawings</h2><p class="small muted">Every part drawn to scale. <span style="color:#c0392b">Red edges</span> are edge-banded; the arrow shows grain direction where the board may not be turned.</p>`
+    + Object.entries(groups).map(([g, ps]) => `<h3>${esc(g)}</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">${ps.map(partSVG).join('')}</div>`).join('');
 }
 
 function mergeSettings(s) {
