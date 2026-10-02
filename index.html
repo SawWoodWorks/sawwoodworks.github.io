@@ -939,6 +939,7 @@ function viewQuote() {
       <div><label>Rate / hour</label><input type="number" style="width:90px" value="${q.rate ?? S.settings.labourRate ?? 0}" onchange="P().quote.rate=num(this.value)??0;touch();render()"></div>
       <div><label>Markup % (built into prices)</label><input type="number" style="width:80px" value="${q.markup ?? S.settings.markup ?? 0}" onchange="P().quote.markup=num(this.value)??0;touch();render()"></div>
       <button class="primary" onclick="window.print()">🖨 Print / save PDF</button><button onclick="const i=newInvoice(P(),true);go('invoice',{inv:i.id})">🧾 Turn into invoice</button></div>
+    ${sendBar('quote')}
     ${missing ? `<div class="msg warn small">${missing} item(s) have no price yet — add prices under Settings → Prices &amp; quotes.</div>` : ''}
     <details style="margin-top:8px"><summary>Extra lines (delivery, installation, worktops…)</summary>${linesEditor('P().quote.lines', q.lines || [])}</details>
     <label style="margin-top:8px">Notes on the quotation</label><textarea rows="2" style="width:100%" onchange="P().quote.notes=this.value;touch();render()">${esc(q.notes || '')}</textarea></div>
@@ -952,8 +953,64 @@ function viewInvoice() {
     ${linesEditor(path + '.lines', inv.lines)}
     <label style="margin-top:8px">Notes on the invoice</label><textarea rows="2" style="width:100%" onchange="${path}.notes=this.value;touch();render()">${esc(inv.notes || '')}</textarea>
     <div class="row" style="margin-top:8px"><button class="primary" onclick="window.print()">🖨 Print / save PDF</button>
-      <button class="danger" onclick="if(confirm('Delete this invoice?')){P().invoices.splice(${i},1);touch();go('project')}">Delete invoice</button></div></div>
+      <button class="danger" onclick="if(confirm('Delete this invoice?')){P().invoices.splice(${i},1);touch();go('project')}">Delete invoice</button></div>
+    ${sendBar('invoice')}</div>
   ${docPaper('invoice', inv, p, inv.lines)}`;
+}
+
+/* ---- send quotation / invoice by WhatsApp or email (PDF made in the browser) ---- */
+function sendBar(kind) {
+  const p = P();
+  return `<div class="row" style="margin-top:10px;align-items:center">
+    <span class="small muted" style="width:100%">Send to client</span>
+    <div><label>Client cell (WhatsApp)</label><input type="tel" value="${esc(p.phone || '')}" placeholder="082 123 4567" onchange="P().phone=this.value.trim();touch()"></div>
+    <div><label>Client email</label><input type="email" value="${esc(p.email || '')}" placeholder="client@email.com" onchange="P().email=this.value.trim();touch()" style="width:230px"></div>
+    <button onclick="sendDoc('${kind}','whatsapp')" style="background:#1f7a46;border-color:#1f7a46;color:#fff">🟢 WhatsApp</button>
+    <button onclick="sendDoc('${kind}','email')" style="background:#2d5f8a;border-color:#2d5f8a;color:#fff">✉ Email</button>
+    <button onclick="sendDoc('${kind}','download')">⬇ Download PDF</button></div>`;
+}
+function loadScript(src) { return new Promise((ok, bad) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => bad(new Error('Could not load ' + src)); document.head.appendChild(s); }); }
+async function docPdf(name) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  const el = document.querySelector('.paper'); if (!el) throw new Error('document not found');
+  // html2canvas can't draw SVG logos — turn them into PNGs first
+  const pngs = await Promise.all([...el.querySelectorAll('img')].map(im => new Promise(res => {
+    if (!/^data:image\/svg/.test(im.src)) return res(null);
+    const i = new Image(); i.onload = () => { const c = document.createElement('canvas'), k = 3; c.width = (im.naturalWidth || im.width || 300) * k; c.height = (im.naturalHeight || im.height || 150) * k; c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL('image/png')); }; i.onerror = () => res(null); i.src = im.src; })));
+  const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: 900,
+    onclone: doc => { const pp = doc.querySelector('.paper'); pp.style.boxShadow = 'none'; [...pp.querySelectorAll('img')].forEach((im, n) => { if (pngs[n]) im.src = pngs[n]; }); } });
+  const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' }), pw = 210, ph = 297, m = 10;
+  let w = pw - 2 * m, h = canvas.height * w / canvas.width;
+  if (h > ph - 2 * m) { h = ph - 2 * m; w = canvas.width * h / canvas.height; }
+  pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pw - w) / 2, m, w, h);
+  return new File([pdf.output('blob')], name, { type: 'application/pdf' });
+}
+function waNumber(t) { let d = String(t || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '27' + d.slice(1); return d; }
+async function sendDoc(kind, how) {
+  const p = P(), d = kind === 'invoice' ? (p.invoices || []).find(x => x.id === V.inv) : p.quote; if (!d) return;
+  const lines = kind === 'invoice' ? d.lines : quoteDocLines(p);
+  const sub = lines.reduce((a, l) => a + (+l.qty || 0) * (+l.price || 0), 0), total = sub * (1 + (+d.taxRate || 0) / 100);
+  const title = kind === 'invoice' ? 'Invoice' : 'Quotation', biz = (LH && LH.bizName) || 'S.A.W Woodworks';
+  const name = `${title} ${d.no} - ${(p.client || p.name || '').replace(/[\\/:*?"<>|]/g, '').trim() || 'client'}.pdf`;
+  const msg = `Hi ${p.client || ''},\n\nPlease find attached ${title.toLowerCase()} #${d.no} from ${biz} for ${p.name}.\nTotal: ${rand(total)}${kind === 'invoice' && S.settings.banking ? '\n\nBanking details: ' + S.settings.banking : ''}\n\nKind regards\n${(ME && ME.name) || S.settings.user || biz}`;
+  toast('Making the PDF…');
+  let file; try { file = await docPdf(name); } catch (e) { toast('Could not make the PDF: ' + e.message); return; }
+  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const download = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+  if (how === 'download') { download(); toast('PDF saved to your Downloads.'); return; }
+  if (mobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: `${title} ${d.no}`, text: msg }); return; } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  download();
+  if (how === 'whatsapp') {
+    const n = waNumber(p.phone);
+    window.open('https://wa.me/' + (n || '') + '?text=' + encodeURIComponent(msg), '_blank');
+    toast(n ? 'PDF downloaded — WhatsApp is opening: drag the PDF into the chat.' : 'PDF downloaded — no client cell number, so pick the contact in WhatsApp and attach the PDF.');
+  } else {
+    location.href = 'mailto:' + encodeURIComponent(p.email || '') + '?subject=' + encodeURIComponent(`${title} ${d.no} from ${biz}`) + '&body=' + encodeURIComponent(msg);
+    toast('PDF downloaded — your email is opening: attach the PDF from Downloads.');
+  }
 }
 function docsCard(p) {
   const invs = p.invoices || [];
@@ -1303,6 +1360,8 @@ function viewProject() {
   <div class="card noprint"><div class="row">
     <div><label>Project name</label><input value="${esc(p.name)}" onchange="P().name=this.value;touch()"></div>
     <div><label>Client</label><input value="${esc(p.client)}" onchange="P().client=this.value;touch()"></div>
+    <div><label>Client cell (WhatsApp)</label><input type="tel" value="${esc(p.phone || '')}" placeholder="082 123 4567" onchange="P().phone=this.value.trim();touch()"></div>
+    <div><label>Client email</label><input type="email" value="${esc(p.email || '')}" placeholder="client@email.com" onchange="P().email=this.value.trim();touch()"></div>
     <div><label>Site address</label><input value="${esc(p.addr)}" onchange="P().addr=this.value;touch()"></div>
     <button class="danger" onclick="delProject()">Delete project</button></div></div>
   <h2>Rooms</h2>
