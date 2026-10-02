@@ -334,8 +334,12 @@ async function bootstrapRoot() {
     const b = F.writeBatch(db);
     b.set(F.doc(db, 'config/app'), { root:ME.uid, created:now });
     b.set(F.doc(db, 'users/' + ME.uid), { name, email:ME.email, role:'root', active:true, lhLocked:false, created:now, settings:defaultSettings() });
-    demoProjects().forEach(p => b.set(F.doc(db, 'users/' + ME.uid + '/projects/' + p.id), p));
-    await b.commit(); await loadMe();
+    await b.commit();
+    // example job is written after the root account exists (the rules check root status before the batch)
+    const b2 = F.writeBatch(db);
+    demoProjects().forEach(p => b2.set(F.doc(db, 'users/' + ME.uid + '/projects/' + p.id), p));
+    try { await b2.commit(); } catch (e) { console.warn('example job', e); }
+    await loadMe();
   } catch (e) { $('#bsMsg').innerHTML = `<div class="msg bad">Could not set up: ${esc(e.code || e.message)}</div>`; }
 }
 function viewNoAccess(blocked) {
