@@ -987,30 +987,40 @@ async function docPdf(name) {
   return new File([pdf.output('blob')], name, { type: 'application/pdf' });
 }
 function waNumber(t) { let d = String(t || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (d.startsWith('0')) return '27' + d.slice(1); return d; }
+let SENDING = null;
 async function sendDoc(kind, how) {
   const p = P(), d = kind === 'invoice' ? (p.invoices || []).find(x => x.id === V.inv) : p.quote; if (!d) return;
   const lines = kind === 'invoice' ? d.lines : quoteDocLines(p);
   const sub = lines.reduce((a, l) => a + (+l.qty || 0) * (+l.price || 0), 0), total = sub * (1 + (+d.taxRate || 0) / 100);
   const title = kind === 'invoice' ? 'Invoice' : 'Quotation', biz = (LH && LH.bizName) || 'S.A.W Woodworks';
+  if (how !== 'download' && !total && !confirm(`This ${title.toLowerCase()} adds up to R 0.00 — prices are missing (Settings → Prices & quotes, or the Extra lines / Show on quote options).\n\nSend it anyway?`)) return;
   const name = `${title} ${d.no} - ${(p.client || p.name || '').replace(/[\\/:*?"<>|]/g, '').trim() || 'client'}.pdf`;
-  const msg = `Hi ${p.client || ''},\n\nPlease find attached ${title.toLowerCase()} #${d.no} from ${biz} for ${p.name}.\nTotal: ${rand(total)}${kind === 'invoice' && S.settings.banking ? '\n\nBanking details: ' + S.settings.banking : ''}\n\nKind regards\n${(ME && ME.name) || S.settings.user || biz}`;
   toast('Making the PDF…');
   let file; try { file = await docPdf(name); } catch (e) { toast('Could not make the PDF: ' + e.message); return; }
-  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const download = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
-  if (how === 'download') { download(); toast('PDF saved to your Downloads.'); return; }
-  if (mobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: `${title} ${d.no}`, text: msg }); return; } catch (e) { if (e.name === 'AbortError') return; }
-  }
-  download();
-  if (how === 'whatsapp') {
-    const n = waNumber(p.phone);
-    window.open('https://wa.me/' + (n || '') + '?text=' + encodeURIComponent(msg), '_blank');
-    toast(n ? 'PDF downloaded — WhatsApp is opening: drag the PDF into the chat.' : 'PDF downloaded — no client cell number, so pick the contact in WhatsApp and attach the PDF.');
-  } else {
-    location.href = 'mailto:' + encodeURIComponent(p.email || '') + '?subject=' + encodeURIComponent(`${title} ${d.no} from ${biz}`) + '&body=' + encodeURIComponent(msg);
-    toast('PDF downloaded — your email is opening: attach the PDF from Downloads.');
-  }
+  const msg = `Hi ${p.client || ''},\n\nPlease find attached ${title.toLowerCase()} #${d.no} from ${biz} for ${p.name}.\nTotal: ${rand(total)}${kind === 'invoice' && S.settings.banking ? '\n\nBanking details: ' + S.settings.banking : ''}\n\nKind regards\n${(ME && ME.name) || S.settings.user || biz}`;
+  SENDING = { file, name, msg, title, no: d.no, biz, how, phone: p.phone, email: p.email, client: p.client || 'the client' };
+  if (how === 'download') { sendDownload(); toast('PDF saved to your Downloads.'); return; }
+  { const t = $('#toast'); if (t) t.style.display = 'none'; }
+  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  const app = how === 'whatsapp' ? 'WhatsApp' : 'your email app (Outlook, Gmail, Mail)';
+  modal(`<h3 style="margin-top:0">${title} ${esc(d.no)} is ready to send</h3>
+    ${canShare ? `<p>Press <b>📤 Send PDF</b>, choose <b>${how === 'whatsapp' ? 'WhatsApp' : 'Outlook / Mail / Gmail'}</b>, pick <b>${esc(SENDING.client)}</b> and press send — the PDF goes in as an attachment, with the message.</p>
+      <div class="row"><button class="primary" onclick="sendShare()">📤 Send PDF</button><button onclick="sendDownload()">⬇ Download PDF</button><button onclick="modal('')">Cancel</button></div>
+      <p class="small muted" style="margin-bottom:0">${how === 'whatsapp' ? 'On a PC, WhatsApp only shows here if the WhatsApp app is installed (Microsoft Store). Otherwise use' : 'Or use'} <a href="#" onclick="sendFallback();return false">download + open ${how === 'whatsapp' ? 'the WhatsApp chat' : 'a new email'}</a> and drag the PDF in.</p>`
+    : `<p>This browser can't attach files to ${app} directly. Press the button: the PDF downloads and ${how === 'whatsapp' ? 'the client\'s WhatsApp chat' : 'a new email'} opens — drag the PDF from Downloads into it.</p>
+      <div class="row"><button class="primary" onclick="sendFallback()">⬇ Download &amp; open ${how === 'whatsapp' ? 'WhatsApp' : 'email'}</button><button onclick="modal('')">Cancel</button></div>`}`);
+}
+async function sendShare() {
+  const x = SENDING; if (!x) return;
+  try { await navigator.clipboard.writeText(x.msg); } catch (e) {}
+  try { await navigator.share({ files: [x.file], title: `${x.title} ${x.no}`, text: x.msg }); modal(''); toast('Sent.'); }
+  catch (e) { if (e.name !== 'AbortError') toast('Could not open the share window (' + e.message + ') — use Download PDF.'); }
+}
+function sendDownload() { const x = SENDING; if (!x) return; const a = document.createElement('a'); a.href = URL.createObjectURL(x.file); a.download = x.name; document.body.appendChild(a); a.click(); a.remove(); }
+function sendFallback() {
+  const x = SENDING; if (!x) return; sendDownload(); modal('');
+  if (x.how === 'whatsapp') { window.open('https://wa.me/' + waNumber(x.phone) + '?text=' + encodeURIComponent(x.msg), '_blank'); toast('PDF downloaded — drag it into the WhatsApp chat.'); }
+  else { location.href = 'mailto:' + encodeURIComponent(x.email || '') + '?subject=' + encodeURIComponent(`${x.title} ${x.no} from ${x.biz}`) + '&body=' + encodeURIComponent(x.msg); toast('PDF downloaded — attach it to the email.'); }
 }
 function docsCard(p) {
   const invs = p.invoices || [];
