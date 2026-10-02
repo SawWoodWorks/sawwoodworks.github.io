@@ -1,0 +1,1196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saw Wood Works</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3b2a1d">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#f6f3ee;--card:#fff;--ink:#2b2520;--muted:#7a6f66;--line:#e2dbd2;
+  --accent:#9a5b2a;--accent2:#c98a4b;--ok:#2f7d4f;--warn:#b7791f;--bad:#b23b3b;
+  --ai:#fff4c2;--new:#e9c9a1;--keep:#d6d3cf;--repl:#f3c1c1;--blue:#3a78b5;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:#3b2a1d;color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px;position:sticky;top:0;z-index:5}
+header .logo{font-weight:800;letter-spacing:.5px;font-size:18px;cursor:pointer;display:flex;align-items:center;gap:8px}
+header .logo span{background:var(--accent2);color:#3b2a1d;border-radius:6px;padding:2px 6px;font-size:13px}
+header nav{margin-left:auto;display:flex;gap:6px}
+header nav button{background:transparent;color:#fff;border:1px solid #ffffff44}
+main{max-width:1200px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:4px 0 12px}h2{font-size:18px;margin:18px 0 8px}h3{font-size:15px;margin:12px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+button,.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.danger{color:var(--bad);border-color:#e7b9b9}
+button.small{padding:3px 8px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
+input[type=number]{width:90px}
+input.ai,select.ai{background:var(--ai);border-color:#e0c25a}
+label{font-size:13px;color:var(--muted);display:block}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 14px}
+.tabs button{border-radius:20px}
+.tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.muted{color:var(--muted)}.small{font-size:13px}
+table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;font-size:14px;vertical-align:middle}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.tablewrap{overflow-x:auto}
+.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.photos figure{margin:0;position:relative}
+.photos img{width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.photos figure button{position:absolute;top:4px;right:4px}
+.msg{padding:9px 12px;border-radius:8px;margin:8px 0;font-size:14px}
+.msg.warn{background:#fff3dc;border:1px solid #f0d199}
+.msg.bad{background:#fde8e8;border:1px solid #efb6b6}
+.msg.ok{background:#e6f4ec;border:1px solid #b5dcc4}
+.msg.ai{background:var(--ai);border:1px solid #e0c25a}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button.on{background:#3b2a1d;color:#fff}
+svg{max-width:100%;height:auto;display:block}
+.svgbox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto}
+tr.sel td{background:#fbf1e4}
+.tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px}
+.tag.new{background:var(--new)}.tag.keep{background:var(--keep)}.tag.replace{background:var(--repl)}.tag.ask{background:var(--ai)}
+#modal .back{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+#modal .box{background:#fff;border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:18px}
+.terms{max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:14px;background:#fcfbf9}
+.big{font-size:28px;font-weight:800}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (max-width:640px){main{padding:10px}header nav button{padding:5px 8px;font-size:13px}}
+@media print{header,.noprint,#modal{display:none!important}body{background:#fff}.card{border:none;padding:0;break-inside:avoid}main{max-width:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo" onclick="go('projects')">🪚 Saw Wood Works <span>v1</span></div>
+  <nav>
+    <button onclick="go('projects')">Projects</button>
+    <button onclick="go('settings')">Settings</button>
+  </nav>
+</header>
+<main id="app"><p class="muted">Loading…</p></main>
+<div id="modal"></div>
+
+<script>
+/* ===== Firebase settings — paste your project's config here (Firebase console → Project settings → Your apps → Config).
+   Leave as null to run without a server (everything saved on this device only). ===== */
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCx1ZJIw6LwcUX3lJ7t_cmHTJKNx_uPmdU",
+  authDomain: "saw-wood-works.firebaseapp.com",
+  projectId: "saw-wood-works",
+  storageBucket: "saw-wood-works.firebasestorage.app",
+  messagingSenderId: "764412321002",
+  appId: "1:764412321002:web:3f10452b1b2f050203cb93"
+};
+</script>
+<script type="module">
+if (window.FIREBASE_CONFIG) {
+  const base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+  try {
+    const [{ initializeApp }, A, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+    const app = initializeApp(window.FIREBASE_CONFIG), auth = A.getAuth(app);
+    let db; try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }); } catch (e) { db = F.getFirestore(app); }
+    window.FB = { auth, db, A, F, initializeApp };
+  } catch (e) { window.FB_ERROR = e; }
+  window.fbReady && window.fbReady();
+}
+</script>
+<script>
+/* ============ basics ============ */
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+const r0 = n => Math.round(n);
+const TERMS_VERSION = 2;
+
+const DEF_SETTINGS = {
+  user: '', agreed: null, provider: 'gemini', geminiKey: '', apiKey: '', model: '',
+  rules: { t:16, back:3, baseH:720, baseD:560, kick:100, worktop:32, wallH:720, wallD:320, wallElev:1450,
+           tallH:2100, tallD:560, railW:100, shelfSet:20, gap:3, slide:26, drawerClear:60 },
+  roles: { carcass:'m1', doors:'m1', backs:'m2' },
+  materials: [
+    { id:'m1', name:'White Melamine 16mm', L:2750, W:1830, kerf:4, trim:10, rotate:true },
+    { id:'m2', name:'Hardboard 3mm (backs & drawer bottoms)', L:2440, W:1220, kerf:4, trim:5, rotate:true }
+  ]
+};
+
+const TYPES = {
+  base:     { label:'Base unit',      zone:'floor', w:600, doors:1, shelves:1, drawers:0 },
+  sink:     { label:'Sink unit',      zone:'floor', w:900, doors:2, shelves:0, drawers:0 },
+  drawer:   { label:'Drawer unit',    zone:'floor', w:500, doors:0, shelves:0, drawers:3 },
+  wall:     { label:'Wall unit',      zone:'upper', w:600, doors:1, shelves:1, drawers:0 },
+  tall:     { label:'Tall / pantry',  zone:'both',  w:600, doors:2, shelves:4, drawers:0 },
+  wardrobe: { label:'Wardrobe (BIC)', zone:'both',  w:900, doors:2, shelves:1, drawers:0 }
+};
+const STATUS = { new:'New', keep:'Keep existing', replace:'Replace existing', ask:'Existing – decide' };
+const SHAPES = { straight:['One wall',1], L:['L-shape',2], U:['U-shape',3], rect:['Full room (4 walls)',4] };
+
+/* ============ storage ============ */
+const DB = {
+  db: null,
+  open() { return new Promise(res => { try { const r = indexedDB.open('sawwoodworks', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => { this.db = r.result; res(); }; r.onerror = () => res(); } catch(e) { res(); } }); },
+  get(k) { return new Promise(res => {
+    if (!this.db) { try { res(JSON.parse(localStorage.getItem('sww_'+k))); } catch(e) { res(null); } return; }
+    const q = this.db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => res(null); }); },
+  set(k, v) { return new Promise(res => {
+    if (!this.db) { try { localStorage.setItem('sww_'+k, JSON.stringify(v)); } catch(e) {} res(); return; }
+    const tx = this.db.transaction('kv','readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => res(); }); }
+};
+
+let S = { settings: null, projects: [] };
+let V = { view:'projects', pid:null, rid:null, tab:'photos', wall:0, sel:null, busy:false, aiMsg:'' };
+let saveT;
+/* ============ Firebase cloud: root-managed users, per-user jobs, letterheads ============ */
+const CLOUD = !!window.FIREBASE_CONFIG;
+let ME = null, ROOT = null, DU = null, LH = null, LHD = null, LOCAL = null, USERS = [];
+let unsubs = [], dataSubs = [], photoSub = null, photoSubKey = null, pendingRender = false;
+let PHOTOS = {};
+let SENT = { projects:{}, settings:'' };
+const isRoot = () => CLOUD && !!ME && ME.role === 'root';
+const dataUid = () => (isRoot() && V.as) || (ME && ME.uid);
+const lhVisible = () => CLOUD && !!ME && (isRoot() || (DU && !DU.lhLocked));
+function save() {
+  clearTimeout(saveT);
+  saveT = setTimeout(() => { saveT = null; if (CLOUD) { if (ME && ME.role) cloudFlush(); } else DB.set('state', JSON.parse(JSON.stringify(S))); }, 250);
+}
+const cpath = (...p) => ['users', dataUid(), ...p].join('/');
+const fbErr = e => { console.error(e); toast('⚠ Could not save to the server: ' + (e.code || e.message)); };
+function toast(t) { let el = $('#toast'); if (!el) { el = document.createElement('div'); el.id = 'toast'; el.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#3b2a1d;color:#fff;padding:9px 14px;border-radius:8px;z-index:30;font-size:14px;max-width:90vw'; document.body.appendChild(el); } el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 4500); }
+function cloudSettings() { const s = { ...S.settings }; delete s.user; delete s.agreed; return JSON.stringify(s); }
+function defaultSettings() { const s = mergeSettings(null); delete s.user; delete s.agreed; return JSON.parse(JSON.stringify(s)); }
+function cloudFlush() {
+  const { F, db } = FB, ids = new Set();
+  S.projects.forEach(p => {
+    ids.add(p.id); const j = JSON.stringify(p);
+    if (SENT.projects[p.id] !== j) { SENT.projects[p.id] = j; F.setDoc(F.doc(db, cpath('projects', p.id)), JSON.parse(j)).catch(fbErr); }
+  });
+  Object.keys(SENT.projects).forEach(id => { if (!ids.has(id)) { delete SENT.projects[id]; F.deleteDoc(F.doc(db, cpath('projects', id))).catch(fbErr); deleteProjectPhotos(id); } });
+  const st = cloudSettings();
+  if (st !== SENT.settings) { SENT.settings = st; F.updateDoc(F.doc(db, 'users/' + dataUid()), { settings: JSON.parse(st) }).catch(fbErr); }
+}
+async function deleteProjectPhotos(pid) {
+  const { F, db } = FB;
+  try { const qs = await F.getDocs(F.query(F.collection(db, cpath('photos')), F.where('pid', '==', pid))); qs.docs.forEach(d => F.deleteDoc(d.ref).catch(() => {})); } catch (e) {}
+}
+function softRender() {
+  const a = document.activeElement;
+  if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && !$('#modal').contains(a)) { pendingRender = true; return; }
+  render();
+}
+document.addEventListener('focusout', () => { if (pendingRender) { pendingRender = false; setTimeout(render, 0); } });
+
+/* ---- passwords: letters + numbers + special characters ---- */
+function pwProblem(p) {
+  if (!p || p.length < 8) return 'Password must be at least 8 characters.';
+  if (!/[A-Za-z]/.test(p)) return 'Password must contain at least one letter.';
+  if (!/[0-9]/.test(p)) return 'Password must contain at least one number.';
+  if (!/[^A-Za-z0-9]/.test(p)) return 'Password must contain at least one special character, e.g. ! @ # $ % & * ?';
+  return null;
+}
+function genPw() {
+  const sets = ['ABCDEFGHJKLMNPQRSTUVWXYZ', 'abcdefghijkmnpqrstuvwxyz', '23456789', '!@#$%&*?'];
+  const r = n => crypto.getRandomValues(new Uint32Array(1))[0] % n;
+  const a = sets.map(s => s[r(s.length)]);
+  while (a.length < 12) { const s = sets[r(4)]; a.push(s[r(s.length)]); }
+  for (let i = a.length - 1; i > 0; i--) { const j = r(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a.join('');
+}
+const PW_HINT = 'At least 8 characters, with letters, numbers and a special character (e.g. ! @ # $ %).';
+
+/* ---- example jobs every new account starts with ---- */
+function demoProjects() {
+  const R0 = DEF_SETTINGS.rules, id = () => uid() + uid();
+  const U = (type, x, w, extra = {}) => { const t = TYPES[type];
+    return { id:id(), type, x, w, h: type==='wall' ? R0.wallH : (t.zone==='both' ? R0.tallH : R0.baseH), d: type==='wall' ? R0.wallD : (t.zone==='both' ? R0.tallD : R0.baseD),
+      elev: type==='wall' ? R0.wallElev : 0, doors:t.doors, shelves:t.shelves, drawers:t.drawers, status:'new', ...extra }; };
+  const W = (label, length, extra = {}) => ({ id:id(), label, length, height:2400, turn:'right', openings:[], units:[], ...extra });
+  const now = new Date().toISOString();
+  const kA = W('A', 3600, { openings:[{ id:id(), type:'window', x:1300, w:1000, h:1000, sill:1100 }],
+    units:[U('drawer',0,500), U('base',500,600), U('sink',1100,900), U('base',2000,600), U('base',2600,1000,{doors:2}),
+           U('wall',0,500), U('wall',500,600), U('wall',2400,600), U('wall',3000,600)] });
+  const kB = W('B', 2600, { openings:[{ id:id(), type:'door', x:1700, w:813, h:2032, sill:0 }],
+    units:[U('tall',0,600), U('base',600,600,{status:'keep'}), U('wall',600,600)] });
+  const bA = W('A', 2700, { units:[U('wardrobe',0,900), U('wardrobe',900,900,{drawers:2}), U('wardrobe',1800,900)] });
+  return [{ id:id(), name:'Example – Smith kitchen & bedroom', client:'Example client', addr:'12 Sample Street', created:now, updated:now, example:true,
+    rooms:[{ id:id(), name:'Kitchen', photos:[], shape:'L', walls:[kA, kB], ai:null, mats:null },
+           { id:id(), name:'Main bedroom BIC', photos:[], shape:'straight', walls:[bA], ai:null, mats:null }] }];
+}
+
+/* ---- start / auth ---- */
+function startCloud() {
+  FB.A.onAuthStateChanged(FB.auth, async u => {
+    unsubs.forEach(f => f()); unsubs = []; detachData();
+    ME = null; ROOT = null; USERS = []; V.as = null;
+    if (!u) { modal(''); go('login'); refreshRootFlag(); return; }
+    ME = { uid:u.uid, email:u.email };
+    await loadMe();
+  });
+}
+async function refreshRootFlag() {
+  try { const c = await FB.F.getDoc(FB.F.doc(FB.db, 'config/app')); ROOT = c.exists() ? c.data().root : null; } catch (e) { ROOT = 'unknown'; }
+  if (V.view === 'login') render();
+}
+async function loadMe() {
+  const { F, db } = FB;
+  try { const c = await F.getDoc(F.doc(db, 'config/app')); ROOT = c.exists() ? c.data().root : null; } catch (e) { ROOT = null; }
+  let us = null; try { us = await F.getDoc(F.doc(db, 'users/' + ME.uid)); } catch (e) {}
+  if (!us || !us.exists()) { go(ROOT ? 'noaccess' : 'bootstrap'); return; }
+  Object.assign(ME, us.data());
+  if (ME.active === false) { go('blocked'); return; }
+  S.settings = mergeSettings(ME.settings); S.settings.user = ME.name; S.settings.agreed = ME.agreed || null;
+  if (isRoot()) unsubs.push(F.onSnapshot(F.collection(db, 'users'), qs => { USERS = qs.docs.map(d => ({ uid:d.id, ...d.data() })); if (V.view === 'users') softRender(); }, () => {}));
+  attachData(true);
+}
+function detachData() { dataSubs.forEach(f => f()); dataSubs = []; if (photoSub) photoSub(); photoSub = null; photoSubKey = null;
+  S.projects = []; SENT = { projects:{}, settings:'' }; PHOTOS = {}; DU = null; LH = null; LHD = null; }
+function attachData(first) {
+  detachData();
+  const { F, db } = FB, u = dataUid();
+  let gotUser = false;
+  dataSubs.push(F.onSnapshot(F.doc(db, 'users/' + u), snap => {
+    DU = snap.data() || {};
+    if (u === ME.uid) {
+      Object.assign(ME, DU);
+      if (DU.active === false) { toast('Your account has been blocked. Contact the administrator.'); FB.A.signOut(FB.auth); return; }
+    }
+    if (!saveT || cloudSettings() === SENT.settings) {
+      S.settings = Object.assign(mergeSettings(DU.settings), { user:ME.name, agreed:ME.agreed || null });
+      SENT.settings = cloudSettings();
+    }
+    if (!gotUser) { gotUser = true;
+      if (first) { V.view = (!isRoot() && !DU.lhLocked) ? 'letterhead' : 'projects'; render(); termsGate(); } else render();
+    } else softRender();
+  }, e => toast('Server error: ' + e.code)));
+  dataSubs.push(F.onSnapshot(F.doc(db, 'users/' + u + '/meta/letterhead'), snap => { LH = snap.exists() ? snap.data() : null; if (!LHD || V.view !== 'letterhead') LHD = null; renderHeader(); if (gotUser) softRender(); }, () => {}));
+  dataSubs.push(F.onSnapshot(F.collection(db, 'users/' + u + '/projects'), qs => {
+    qs.docChanges().forEach(ch => {
+      const id = ch.doc.id, local = S.projects.find(p => p.id === id);
+      if (ch.type === 'removed') { S.projects = S.projects.filter(p => p.id !== id); delete SENT.projects[id]; return; }
+      const data = ch.doc.data(), j = JSON.stringify(data);
+      if (local && saveT && JSON.stringify(local) !== SENT.projects[id]) return;
+      SENT.projects[id] = j;
+      if (local) { Object.keys(local).forEach(k => delete local[k]); Object.assign(local, data); } else S.projects.push(data);
+    });
+    if (gotUser && !['login','setup','bootstrap'].includes(V.view)) softRender();
+  }, e => toast('Server error: ' + e.code)));
+}
+function watchPhotos(pid) {
+  const key = dataUid() + '/' + pid;
+  if (!CLOUD || !ME || !ME.role || photoSubKey === key) return;
+  if (photoSub) photoSub(); photoSubKey = key;
+  const { F, db } = FB;
+  photoSub = F.onSnapshot(F.query(F.collection(db, cpath('photos')), F.where('pid', '==', pid)), qs => {
+    let changed = false;
+    qs.docChanges().forEach(ch => { if (ch.type === 'removed') delete PHOTOS[ch.doc.id]; else PHOTOS[ch.doc.id] = ch.doc.data().data; changed = true; });
+    if (changed && V.view === 'room' && V.tab === 'photos') softRender();
+  }, () => {});
+}
+const photoSrc = x => typeof x === 'string' && x.startsWith('ph:') ? PHOTOS[x.slice(3)] : x;
+
+/* ---- login / first-time root / no access ---- */
+function viewLogin() {
+  return `<div class="card" style="max-width:420px;margin:30px auto">
+    <h1 style="margin-top:0">Sign in</h1>
+    <label>Email</label><input id="lgE" type="email" autocomplete="username" style="width:100%">
+    <label style="margin-top:8px">Password</label><input id="lgP" type="password" autocomplete="current-password" style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="lgMsg"></div>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="doLogin()">Sign in</button>
+    <button class="small" style="border:none;color:var(--accent)" onclick="doReset()">Forgot password?</button></div>
+    ${ROOT === null ? `<hr style="border:none;border-top:1px solid var(--line);margin:16px 0"><p class="small"><b>First time setting up Saw Wood Works?</b> Type the email and password for the <b>root (administrator)</b> account above, then press:</p>
+      <button onclick="doRootSignup()">Create root account</button><p class="small muted">${PW_HINT}</p>`
+      : `<p class="small muted">Accounts are created by the administrator.</p>`}</div>`;
+}
+const authMsg = e => ({ 'auth/invalid-credential':'Wrong email or password.', 'auth/wrong-password':'Wrong email or password.', 'auth/user-not-found':'Wrong email or password.',
+  'auth/email-already-in-use':'That email already has a login.', 'auth/weak-password':PW_HINT, 'auth/password-does-not-meet-requirements':PW_HINT, 'auth/invalid-email':'That email address is not valid.',
+  'auth/too-many-requests':'Too many tries — wait a few minutes and try again.', 'auth/network-request-failed':'No internet connection.' }[e.code] || e.message);
+function lgVals() { return [$('#lgE').value.trim(), $('#lgP').value]; }
+function lgShow(t, k = 'bad') { $('#lgMsg').innerHTML = `<div class="msg ${k}">${esc(t)}</div>`; }
+async function doLogin() { const [e, p] = lgVals(); if (!e || !p) return lgShow('Enter your email and password.'); try { await FB.A.signInWithEmailAndPassword(FB.auth, e, p); } catch (x) { lgShow(authMsg(x)); } }
+async function doReset() { const [e] = lgVals(); if (!e) return lgShow('Type your email first.'); try { await FB.A.sendPasswordResetEmail(FB.auth, e); lgShow('If that email has an account, a reset link is on its way.', 'ok'); } catch (x) { lgShow(authMsg(x)); } }
+async function doRootSignup() { const [e, p] = lgVals(); if (!e) return lgShow('Enter an email.'); const bad = pwProblem(p); if (bad) return lgShow(bad);
+  try { await FB.A.createUserWithEmailAndPassword(FB.auth, e, p); } catch (x) { lgShow(authMsg(x)); } }
+function viewBootstrap() {
+  return `<div class="card" style="max-width:520px;margin:30px auto"><h1 style="margin-top:0">Set up Saw Wood Works</h1>
+    <p>This is the first account, so <b>${esc(ME.email)}</b> becomes the <b>root administrator</b>. Root creates all other users, resets passwords and can see everything.</p>
+    <label>Your name</label><input id="bsName" style="width:100%" placeholder="e.g. Sean Warren"><div id="bsMsg"></div>
+    <div class="row" style="margin-top:12px"><button class="primary" onclick="bootstrapRoot()">Make me root</button><button onclick="FB.A.signOut(FB.auth)">Cancel</button></div></div>`;
+}
+async function bootstrapRoot() {
+  const name = $('#bsName').value.trim(); if (!name) return $('#bsMsg').innerHTML = '<div class="msg bad">Enter your name.</div>';
+  const { F, db } = FB, now = new Date().toISOString();
+  try {
+    const b = F.writeBatch(db);
+    b.set(F.doc(db, 'config/app'), { root:ME.uid, created:now });
+    b.set(F.doc(db, 'users/' + ME.uid), { name, email:ME.email, role:'root', active:true, lhLocked:false, created:now, settings:defaultSettings() });
+    demoProjects().forEach(p => b.set(F.doc(db, 'users/' + ME.uid + '/projects/' + p.id), p));
+    await b.commit(); await loadMe();
+  } catch (e) { $('#bsMsg').innerHTML = `<div class="msg bad">Could not set up: ${esc(e.code || e.message)}</div>`; }
+}
+function viewNoAccess(blocked) {
+  return `<div class="card" style="max-width:480px;margin:30px auto"><h1 style="margin-top:0">${blocked ? 'Account blocked' : 'No access yet'}</h1>
+    <p>${blocked ? 'Your account has been blocked.' : 'This login has not been set up in Saw Wood Works.'} Please contact the administrator.</p>
+    <button onclick="FB.A.signOut(FB.auth)">Sign out</button></div>`;
+}
+
+/* ---- root: Users app ---- */
+function viewUsers() {
+  if (!isRoot()) return '<p>Only the administrator can see this page.</p>';
+  const list = USERS.slice().sort((a, b) => (a.role === 'root' ? -1 : 0) - (b.role === 'root' ? -1 : 0) || (a.name || '').localeCompare(b.name || ''));
+  return `<h1>Users</h1>
+  <div class="card"><h3 style="margin-top:0">Add a user</h3>
+    <div class="row"><div><label>Name</label><input id="nuName" placeholder="Full name"></div>
+    <div><label>Email (their login)</label><input id="nuEmail" type="email" placeholder="name@company.co.za" style="width:240px"></div>
+    <div><label>Password</label><input id="nuPw" style="width:170px" placeholder="type or generate"></div>
+    <button onclick="$('#nuPw').value=genPw()">Generate</button>
+    <button class="primary" onclick="createUser()">Create user</button></div>
+    <p class="small muted">${PW_HINT} New users start with an example job so they can see what the app does.</p><div id="nuMsg">${V.nuMsg || ''}</div></div>
+  <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Letterhead</th><th>Jobs</th><th></th></tr>
+    ${list.map(u => `<tr><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${u.role === 'root' ? 'Root' : 'User'}</td>
+      <td>${u.active === false ? '<span class="tag replace">Blocked</span>' : '<span class="tag new">Active</span>'}</td>
+      <td>${u.lhLocked ? '<span class="tag keep">Done – hidden</span>' : '<span class="tag ask">Open</span>'}</td>
+      <td><button class="small" onclick="openAs('${u.uid}')">Open</button></td>
+      <td class="row" style="gap:4px">
+        <button class="small" onclick="openAs('${u.uid}','letterhead')">Letterhead</button>
+        ${u.role !== 'root' ? `<button class="small" onclick="setUser('${u.uid}',{lhLocked:${!u.lhLocked}})">${u.lhLocked ? 'Unhide letterhead' : 'Hide letterhead'}</button>
+        <button class="small" onclick="resetPw('${esc(u.email)}')">Reset password</button>
+        <button class="small ${u.active === false ? '' : 'danger'}" onclick="setUser('${u.uid}',{active:${u.active === false}})">${u.active === false ? 'Unblock' : 'Block'}</button>
+        <button class="small" onclick="addExamples('${u.uid}')">+ Example job</button>` : ''}
+      </td></tr>`).join('')}</table></div>
+    <p class="small muted">"Reset password" emails the user a link to choose a new password. "Block" stops them logging in straight away.</p></div>`;
+}
+let CREATOR = null;
+async function createUser() {
+  const name = $('#nuName').value.trim(), email = $('#nuEmail').value.trim(), pw = $('#nuPw').value;
+  const show = (t, k = 'bad') => { V.nuMsg = `<div class="msg ${k}">${t}</div>`; $('#nuMsg').innerHTML = V.nuMsg; };
+  if (!name || !email) return show('Enter a name and email.');
+  const bad = pwProblem(pw); if (bad) return show(esc(bad));
+  const { F, db, A } = FB;
+  try {
+    if (!CREATOR) { const app2 = FB.initializeApp(window.FIREBASE_CONFIG, 'user-creator'); CREATOR = A.initializeAuth(app2, { persistence: A.inMemoryPersistence }); }
+    const cred = await A.createUserWithEmailAndPassword(CREATOR, email, pw);
+    const nu = cred.user.uid; await A.signOut(CREATOR);
+    const now = new Date().toISOString(), b = F.writeBatch(db);
+    b.set(F.doc(db, 'users/' + nu), { name, email, role:'user', active:true, lhLocked:false, created:now, createdBy:ME.uid, settings:defaultSettings() });
+    demoProjects().forEach(p => b.set(F.doc(db, 'users/' + nu + '/projects/' + p.id), p));
+    await b.commit();
+    show(`✔ ${esc(name)} created. Give them their login: <b>${esc(email)}</b> / <b>${esc(pw)}</b> — they can change the password in Settings.`, 'ok');
+    $('#nuName').value = ''; $('#nuEmail').value = ''; $('#nuPw').value = '';
+  } catch (e) { show(esc(authMsg(e))); }
+}
+async function setUser(u, patch) { try { await FB.F.updateDoc(FB.F.doc(FB.db, 'users/' + u), patch); toast('Saved.'); } catch (e) { fbErr(e); } }
+async function resetPw(email) {
+  if (!confirm('Email a password reset link to ' + email + '?')) return;
+  try { await FB.A.sendPasswordResetEmail(FB.auth, email); toast('Reset email sent to ' + email); } catch (e) { toast(authMsg(e)); }
+}
+async function addExamples(u) {
+  const { F, db } = FB, b = F.writeBatch(db);
+  demoProjects().forEach(p => b.set(F.doc(db, 'users/' + u + '/projects/' + p.id), p));
+  try { await b.commit(); toast('Example job added.'); } catch (e) { fbErr(e); }
+}
+function openAs(u, view = 'projects') { V.as = u === ME.uid ? null : u; V.pid = null; V.rid = null; attachData(false); go(view); }
+function asBanner() {
+  if (!isRoot() || !V.as) return '';
+  const u = USERS.find(x => x.uid === V.as);
+  return `<div class="msg warn noprint">You are viewing <b>${esc(u ? u.name : 'another user')}</b>'s account. Changes save to their account. <button class="small" onclick="openAs('${ME.uid}')">Back to my account</button></div>`;
+}
+
+/* ---- letterhead ---- */
+const LH_FIELDS = [['bizName','Business name'],['address','Address (one line per row)','area'],['phone','Phone'],['email','Email'],['web','Website'],['regNo','Company reg. no.'],['vatNo','VAT no.'],['footer','Footer line (e.g. bank details or slogan)']];
+const safeColour = c => /^#[0-9a-f]{6}$/i.test(c || '') ? c : '#3b2a1d';
+function letterheadHTML(lh, opts = {}) {
+  if (!lh || !(lh.bizName || lh.logo)) return '';
+  const c = safeColour(lh.colour), layout = lh.layout || 'left';
+  const logo = lh.logo ? `<img src="${lh.logo}" alt="" style="max-height:${opts.small ? 50 : 90}px;max-width:240px;object-fit:contain">` : '';
+  const contact = [lh.phone && 'Tel: ' + lh.phone, lh.email, lh.web].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ');
+  const reg = [lh.regNo && 'Reg: ' + lh.regNo, lh.vatNo && 'VAT: ' + lh.vatNo].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ');
+  const text = `<div style="font-size:22px;font-weight:800;color:${c}">${esc(lh.bizName || '')}</div>
+    <div class="small" style="line-height:1.4">${esc(lh.address || '').replace(/\n/g, '<br>')}${contact ? '<br>' + contact : ''}${reg ? '<br>' + reg : ''}</div>`;
+  const inner = layout === 'center' ? `<div style="text-align:center">${logo ? `<div>${logo}</div>` : ''}${text}</div>`
+    : `<div style="display:flex;gap:16px;align-items:center;${layout === 'right' ? 'flex-direction:row-reverse;text-align:right' : ''}">${logo}<div style="flex:1">${text}</div></div>`;
+  return `<div class="lh" style="background:#fff;color:#222;padding:12px 14px;border-bottom:4px solid ${c};margin-bottom:12px;border-radius:6px 6px 0 0">${inner}
+    ${lh.footer ? `<div class="small" style="margin-top:6px;color:#666">${esc(lh.footer)}</div>` : ''}</div>`;
+}
+function viewLetterhead() {
+  if (!lhVisible()) { V.view = 'projects'; return viewProjects(); }
+  if (!LHD) LHD = Object.assign({ layout:'left', colour:'#3b2a1d' }, LH || {});
+  const d = LHD;
+  return `${asBanner()}<h1>My letterhead</h1>
+  <p class="muted">Design the letterhead that appears at the top of your app and on everything you print (cut lists, drawings, board totals).
+  ${isRoot() ? '' : '<b>Once you press "Save & finish", this page is hidden.</b> The administrator can open it again if you need changes.'}</p>
+  <div class="card"><div class="row" style="align-items:flex-start">
+    <div style="flex:1;min-width:260px">
+      <label class="btn" style="display:inline-block;margin-bottom:8px">🖼 Upload logo<input type="file" accept="image/*" style="display:none" onchange="lhLogo(this.files[0])"></label>
+      ${d.logo ? `<button class="small danger" onclick="LHD.logo='';render()">Remove logo</button>` : ''}
+      ${LH_FIELDS.map(([k, l, t]) => `<label style="margin-top:6px">${l}</label>${t === 'area'
+        ? `<textarea rows="3" style="width:100%" oninput="LHD.${k}=this.value;lhPrev()">${esc(d[k] || '')}</textarea>`
+        : `<input style="width:100%" value="${esc(d[k] || '')}" oninput="LHD.${k}=this.value;lhPrev()">`}`).join('')}
+      <div class="row" style="margin-top:8px"><div><label>Colour</label><input type="color" value="${safeColour(d.colour)}" oninput="LHD.colour=this.value;lhPrev()"></div>
+        <div><label>Layout</label><select onchange="LHD.layout=this.value;lhPrev()">${[['left','Logo left'],['center','Centred'],['right','Logo right']].map(([v, l]) => `<option value="${v}" ${d.layout === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    </div>
+    <div style="flex:1.3;min-width:280px"><label>Preview</label><div id="lhPrev" style="border:1px solid var(--line);border-radius:8px;background:#fff">${letterheadHTML(d) || '<p class="muted" style="padding:12px">Fill in your business name or upload a logo.</p>'}</div></div>
+  </div>
+  <div class="row" style="margin-top:12px">
+    ${isRoot() ? `<button class="primary" onclick="lhSave(false)">Save letterhead</button>` : `<button class="primary" onclick="lhSave(true)">Save &amp; finish</button><button onclick="go('projects')">Skip for now</button>`}
+  </div></div>`;
+}
+function lhPrev() { const el = $('#lhPrev'); if (el) el.innerHTML = letterheadHTML(LHD) || '<p class="muted" style="padding:12px">Fill in your business name or upload a logo.</p>'; }
+function lhLogo(f) {
+  if (!f) return; const fr = new FileReader();
+  fr.onload = () => { const img = new Image(); img.onload = () => {
+    const s = Math.min(1, 600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = r0(img.width * s); c.height = r0(img.height * s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    LHD.logo = c.toDataURL('image/png'); if (LHD.logo.length > 600000) LHD.logo = c.toDataURL('image/jpeg', 0.85); render(); };
+    img.src = fr.result; };
+  fr.readAsDataURL(f);
+}
+async function lhSave(finish) {
+  const d = LHD || {};
+  if (!d.bizName && !d.logo) return alert('Enter your business name or upload a logo first.');
+  if (finish && !confirm('Save your letterhead? This page will then be hidden — the administrator can open it again if you need changes.')) return;
+  const { F, db } = FB, u = dataUid();
+  const clean = {}; ['logo', 'layout', 'colour', ...LH_FIELDS.map(f => f[0])].forEach(k => clean[k] = d[k] || '');
+  clean.colour = safeColour(clean.colour); clean.updated = new Date().toISOString();
+  try {
+    await F.setDoc(F.doc(db, 'users/' + u + '/meta/letterhead'), clean);
+    if (finish) await F.updateDoc(F.doc(db, 'users/' + u), { lhLocked:true });
+    LH = clean; LHD = null; toast('Letterhead saved.'); renderHeader(); go('projects');
+  } catch (e) { fbErr(e); }
+}
+function renderHeader() {
+  const el = document.querySelector('header .logo'); if (!el) return;
+  el.innerHTML = LH && (LH.logo || LH.bizName)
+    ? `${LH.logo ? `<img src="${LH.logo}" alt="" style="height:30px;max-width:120px;object-fit:contain;background:#fff;border-radius:4px;padding:2px">` : ''}<span style="background:none;color:#fff;font-size:16px;padding:0">${esc(LH.bizName || '')}</span><span>Saw Wood Works</span>`
+    : '🪚 Saw Wood Works <span>v1</span>';
+}
+function renderNav() {
+  const nav = document.querySelector('header nav'); if (!nav) return;
+  if (CLOUD && (!ME || !ME.role)) { nav.innerHTML = ''; return; }
+  const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v ? 'style="background:#ffffff22"' : ''}>${l}</button>`;
+  nav.innerHTML = b('projects', 'Projects') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
+}
+
+/* ---- account card in Settings ---- */
+function accountCard() {
+  if (!CLOUD || !ME) return '';
+  return `<div class="card"><h3 style="margin-top:0">My account</h3>
+    <p class="small">Signed in as <b>${esc(ME.name)}</b> (${esc(ME.email)})${isRoot() ? ' — <b>root administrator</b>' : ''}.</p>
+    <details><summary>Change my password</summary><div class="row" style="margin-top:8px">
+      <div><label>Current password</label><input id="cpOld" type="password"></div><div><label>New password</label><input id="cpNew" type="password"></div>
+      <button onclick="changePw()">Change password</button></div><p class="small muted">${PW_HINT}</p><div id="cpMsg"></div></details>
+    <div class="row" style="margin-top:10px"><button onclick="FB.A.signOut(FB.auth)">Sign out</button>
+    ${LOCAL && LOCAL.projects && LOCAL.projects.length ? `<button onclick="uploadLocal()">⬆ Upload ${LOCAL.projects.length} project(s) saved on this device</button>` : ''}</div></div>`;
+}
+async function changePw() {
+  const o = $('#cpOld').value, n = $('#cpNew').value, show = (t, k = 'bad') => $('#cpMsg').innerHTML = `<div class="msg ${k}">${esc(t)}</div>`;
+  const bad = pwProblem(n); if (bad) return show(bad);
+  try { const { A } = FB, u = FB.auth.currentUser;
+    await A.reauthenticateWithCredential(u, A.EmailAuthProvider.credential(u.email, o)); await A.updatePassword(u, n); show('Password changed.', 'ok');
+  } catch (e) { show(authMsg(e)); }
+}
+async function uploadLocal() {
+  const n = LOCAL.projects.length;
+  if (!confirm(`Upload ${n} project(s) from this device to your account?`)) return;
+  const { F, db } = FB;
+  for (const p of JSON.parse(JSON.stringify(LOCAL.projects))) {
+    for (const r of p.rooms) {
+      const refs = [];
+      for (const d of r.photos) {
+        if (typeof d !== 'string' || d.startsWith('ph:')) { refs.push(d); continue; }
+        const id = uid() + uid(); PHOTOS[id] = d; refs.push('ph:' + id);
+        try { await F.setDoc(F.doc(db, cpath('photos', id)), { pid:p.id, rid:r.id, data:d, at:new Date().toISOString() }); } catch (e) { fbErr(e); }
+      }
+      r.photos = refs;
+    }
+    if (!S.projects.some(x => x.id === p.id)) S.projects.push(p);
+  }
+  cloudFlush(); LOCAL.projects = []; DB.set('state', LOCAL); toast(`Uploaded ${n} project(s).`); render();
+}
+
+function mergeSettings(s) {
+  const d = JSON.parse(JSON.stringify(DEF_SETTINGS));
+  if (!s) return d;
+  return { ...d, ...s, rules:{ ...d.rules, ...(s.rules||{}) }, roles:{ ...d.roles, ...(s.roles||{}) },
+           materials: (s.materials && s.materials.length) ? s.materials : d.materials };
+}
+
+const P = () => S.projects.find(p => p.id === V.pid);
+const R = () => { const p = P(); return p && p.rooms.find(r => r.id === V.rid); };
+const R_ = () => S.settings.rules;
+const mat = id => S.settings.materials.find(m => m.id === id);
+
+function go(view, extra = {}) { Object.assign(V, { view }, extra); render(); window.scrollTo(0,0); }
+
+/* ============ model helpers ============ */
+function newWall(i) { return { id:uid(), label:'ABCDEFGH'[i] || ('W'+(i+1)), length:null, height:2400, turn:'right', openings:[], units:[] }; }
+function newRoom(name) { const r = { id:uid(), name, photos:[], shape:'straight', walls:[newWall(0)], ai:null, mats:null }; return r; }
+function unitDefaults(type) {
+  const t = TYPES[type], Rl = R_();
+  const h = type==='wall' ? Rl.wallH : (t.zone==='both' ? Rl.tallH : Rl.baseH);
+  const d = type==='wall' ? Rl.wallD : (t.zone==='both' ? Rl.tallD : Rl.baseD);
+  return { id:uid(), type, w:t.w, h, d, x:0, elev: type==='wall' ? Rl.wallElev : 0,
+           doors:t.doors, shelves:t.shelves, drawers:t.drawers, status:'new' };
+}
+const lanes = type => { const z = TYPES[type].zone; return z==='both' ? ['floor','upper'] : [z]; };
+function laneEnd(wall, type) {
+  const ls = lanes(type); let end = 0;
+  wall.units.forEach(u => { if (lanes(u.type).some(l => ls.includes(l))) end = Math.max(end, (+u.x||0) + (+u.w||0)); });
+  return end;
+}
+function unitRef(wall, u) { return wall.label + (wall.units.indexOf(u) + 1); }
+function setShape(room, shape) {
+  const n = SHAPES[shape][1];
+  if (room.walls.length > n) {
+    const lost = room.walls.slice(n).reduce((a, w) => a + w.units.length + w.openings.length, 0);
+    if (lost && !confirm(`This removes wall(s) ${room.walls.slice(n).map(w=>w.label).join(', ')} and the ${lost} item(s) on them. Continue?`)) return;
+    room.walls.length = n;
+  }
+  while (room.walls.length < n) room.walls.push(newWall(room.walls.length));
+  room.shape = shape; V.wall = Math.min(V.wall, n-1); save(); render();
+}
+
+/* ============ cupboard → parts ============ */
+function unitParts(u) {
+  const Rl = R_(), t = Rl.t, out = [], zone = TYPES[u.type].zone;
+  const W = +u.w, H = +u.h, D = +u.d, iw = W - 2*t;
+  const add = (name, L, Wd, qty, role='carcass') => { if (qty > 0 && L > 0 && Wd > 0) out.push({ name, L:r0(L), W:r0(Wd), qty, role }); };
+  add('Side', H, D, 2);
+  if (zone === 'floor') { add('Bottom', iw, D, 1); add('Top rail', iw, Rl.railW, 2); }
+  else { add('Top', iw, D, 1); add('Bottom', iw, D, 1); }
+  add('Shelf', iw, D - Rl.shelfSet - Rl.back, +u.shelves||0);
+  add('Back', H, W, 1, 'backs');
+  if (zone !== 'upper' && Rl.kick > 0) add('Kick', W, Rl.kick, 1);
+  const nd = +u.doors||0, nr = +u.drawers||0;
+  if (nr > 0) {
+    const doorZone = nd > 0 ? H/2 : H;           // drawers + doors combo: drawers take top half
+    const fh = (doorZone - Rl.gap*nr) / nr;
+    add('Drawer front', W - Rl.gap, fh, nr, 'doors');
+    const bh = Math.max(80, fh - Rl.drawerClear), bl = D - 50;
+    add('Drawer side', bl, bh, 2*nr);
+    add('Drawer front/back', iw - Rl.slide - 2*t, bh, 2*nr);
+    add('Drawer bottom', iw - Rl.slide, bl, nr, 'backs');
+    if (nd > 0) add('Door', H/2 - Rl.gap, (W - Rl.gap*nd)/nd, nd, 'doors');
+  } else if (nd > 0) {
+    add('Door', H - Rl.gap, (W - Rl.gap*nd)/nd, nd, 'doors');
+  }
+  return out;
+}
+function roomMats(room) { return Object.assign({}, S.settings.roles, room.mats || {}); }
+function roomParts(room) {
+  const roles = roomMats(room), list = [];
+  room.walls.forEach(w => w.units.forEach(u => {
+    if (u.status === 'keep' || u.status === 'ask') return;
+    unitParts(u).forEach(p => list.push({ ...p, ref: unitRef(w, u), matId: roles[p.role] }));
+  }));
+  return list;
+}
+
+/* ============ sheet optimiser (MaxRects, best short side fit) ============ */
+class Bin {
+  constructor(w, h) { this.w = w; this.h = h; this.free = [{x:0,y:0,w,h}]; this.used = []; }
+  find(w, h, rot) {
+    let best = null;
+    for (const f of this.free) {
+      for (const [ww, hh, r] of rot ? [[w,h,false],[h,w,true]] : [[w,h,false]]) {
+        if (ww <= f.w && hh <= f.h) {
+          const s = Math.min(f.w-ww, f.h-hh), l = Math.max(f.w-ww, f.h-hh);
+          if (!best || s < best.s || (s === best.s && l < best.l)) best = { x:f.x, y:f.y, w:ww, h:hh, r, s, l };
+        }
+      }
+    }
+    return best;
+  }
+  place(n) {
+    const nf = [];
+    for (const f of this.free) {
+      if (n.x >= f.x+f.w || n.x+n.w <= f.x || n.y >= f.y+f.h || n.y+n.h <= f.y) { nf.push(f); continue; }
+      if (n.x > f.x) nf.push({ x:f.x, y:f.y, w:n.x-f.x, h:f.h });
+      if (n.x+n.w < f.x+f.w) nf.push({ x:n.x+n.w, y:f.y, w:f.x+f.w-n.x-n.w, h:f.h });
+      if (n.y > f.y) nf.push({ x:f.x, y:f.y, w:f.w, h:n.y-f.y });
+      if (n.y+n.h < f.y+f.h) nf.push({ x:f.x, y:n.y+n.h, w:f.w, h:f.y+f.h-n.y-n.h });
+    }
+    this.free = nf.filter((a, i) => !nf.some((b, j) => j !== i && a.x >= b.x && a.y >= b.y && a.x+a.w <= b.x+b.w && a.y+a.h <= b.y+b.h && (j < i || a.x!==b.x || a.y!==b.y || a.w!==b.w || a.h!==b.h)));
+    this.used.push(n);
+  }
+}
+function packMaterial(parts, m) {
+  const k = +m.kerf||0, SW = m.L - 2*(+m.trim||0), SH = m.W - 2*(+m.trim||0);
+  const items = [];
+  parts.forEach(p => { for (let i = 0; i < p.qty; i++) items.push(p); });
+  items.sort((a, b) => Math.max(b.L,b.W) - Math.max(a.L,a.W) || b.L*b.W - a.L*a.W);
+  const bins = [], over = [];
+  for (const p of items) {
+    const w = p.L + k, h = p.W + k;
+    let placed = false;
+    for (const b of bins) { const f = b.find(w, h, m.rotate); if (f) { b.place({ ...f, p }); placed = true; break; } }
+    if (!placed) {
+      const b = new Bin(SW + k, SH + k); const f = b.find(w, h, m.rotate);
+      if (f) { b.place({ ...f, p }); bins.push(b); } else over.push(p);
+    }
+  }
+  const area = parts.reduce((a, p) => a + p.L*p.W*p.qty, 0) - over.reduce((a,p)=>a+p.L*p.W,0);
+  const usage = bins.length ? area / (bins.length * m.L * m.W) : 0;
+  return { bins, over, usage, SW, SH, k };
+}
+function packAll(parts) {
+  const byMat = {};
+  parts.forEach(p => (byMat[p.matId] = byMat[p.matId] || []).push(p));
+  return Object.entries(byMat).map(([id, ps]) => { const m = mat(id) || { id, name:'(missing material)', L:2750, W:1830, kerf:4, trim:10, rotate:true }; return { m, parts:ps, ...packMaterial(ps, m) }; });
+}
+
+/* ============ checks ============ */
+function wallWarnings(w) {
+  const out = [], L = +w.length, Rl = R_();
+  if (!L) { out.push(['bad', `Wall ${w.label}: fill in the wall length.`]); return out; }
+  const H = +w.height || 2400;
+  w.units.forEach(u => {
+    const ref = unitRef(w, u), x = +u.x, e = x + (+u.w);
+    if (e > L) out.push(['bad', `${ref} runs ${r0(e - L)} mm past the end of wall ${w.label}.`]);
+    if (x < 0) out.push(['bad', `${ref} starts before the wall (x is negative).`]);
+    const z = TYPES[u.type].zone;
+    const top = z === 'upper' ? (+u.elev + +u.h) : (Rl.kick + +u.h + (z === 'floor' ? Rl.worktop : 0));
+    if (top > H) out.push(['warn', `${ref} is ${r0(top - H)} mm higher than the ceiling height.`]);
+    w.openings.forEach(o => {
+      const ox = +o.x, oe = ox + (+o.w);
+      if (e <= ox || x >= oe) return;
+      const oz0 = o.type === 'door' ? 0 : +o.sill, oz1 = oz0 + (+o.h);
+      const uz0 = z === 'upper' ? +u.elev : 0, uz1 = z === 'upper' ? +u.elev + +u.h : top;
+      if (uz0 < oz1 && uz1 > oz0) out.push(['warn', `${ref} overlaps the ${o.type} on wall ${w.label}.`]);
+    });
+  });
+  for (let i = 0; i < w.units.length; i++) for (let j = i+1; j < w.units.length; j++) {
+    const a = w.units[i], b = w.units[j];
+    if (!lanes(a.type).some(l => lanes(b.type).includes(l))) continue;
+    if (+a.x < +b.x + +b.w && +b.x < +a.x + +a.w) out.push(['bad', `${unitRef(w,a)} and ${unitRef(w,b)} overlap.`]);
+  }
+  const fe = laneEnd(w, 'base');
+  if (w.units.some(u => lanes(u.type).includes('floor')) && L - fe > 0) out.push(['ok', `${r0(L - fe)} mm free at the end of the floor run on wall ${w.label}.`]);
+  return out;
+}
+
+/* ============ drawings ============ */
+const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
+function planGeom(room) {
+  let x = 0, y = 0, dir = 0; const segs = [];
+  room.walls.forEach(w => {
+    const L = +w.length || 2000, [dx, dy] = DIRS[dir];
+    segs.push({ w, x1:x, y1:y, x2:x+dx*L, y2:y+dy*L, dx, dy, nx:-dy, ny:dx, L });
+    x += dx*L; y += dy*L; dir = (dir + (w.turn === 'left' ? 3 : 1)) % 4;
+  });
+  return segs;
+}
+function planSVG(room, opts = {}) {
+  const segs = planGeom(room); const pts = [];
+  segs.forEach(s => { pts.push([s.x1,s.y1],[s.x2,s.y2],[s.x1+s.nx*700,s.y1+s.ny*700],[s.x2+s.nx*700,s.y2+s.ny*700]); });
+  const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+  const pad = 450, minX = Math.min(...xs)-pad, minY = Math.min(...ys)-pad, W = Math.max(...xs)-minX+pad, H = Math.max(...ys)-minY+pad;
+  const fs = Math.max(W, H) / 38;
+  let g = '';
+  segs.forEach((s, i) => {
+    const P = d => [s.x1 + s.dx*d, s.y1 + s.dy*d];
+    s.w.units.forEach(u => {
+      const d = +u.d || 300, a = P(+u.x), b = P(+u.x + +u.w);
+      const poly = [a, b, [b[0]+s.nx*d, b[1]+s.ny*d], [a[0]+s.nx*d, a[1]+s.ny*d]].map(p => p.join(',')).join(' ');
+      const fill = u.status === 'keep' ? 'var(--keep)' : u.status === 'replace' ? 'var(--repl)' : u.status === 'ask' ? 'var(--ai)' : 'var(--new)';
+      const upper = TYPES[u.type].zone === 'upper';
+      g += `<polygon points="${poly}" fill="${upper ? 'none' : fill}" stroke="#6b4a2e" stroke-width="2" ${upper ? 'stroke-dasharray="8 6"' : ''} vector-effect="non-scaling-stroke"/>`;
+      const cx = (a[0]+b[0])/2 + s.nx*d/2, cy = (a[1]+b[1])/2 + s.ny*d/2;
+      g += `<text x="${cx}" y="${cy + (upper ? fs : 0)}" font-size="${fs*0.8}" text-anchor="middle" dominant-baseline="middle" fill="#3b2a1d">${esc(unitRef(s.w,u))}</text>`;
+    });
+    g += `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="#3b2a1d" stroke-width="7" stroke-linecap="square" vector-effect="non-scaling-stroke"/>`;
+    s.w.openings.forEach(o => {
+      const a = P(+o.x), b = P(+o.x + +o.w);
+      g += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${o.type==='door' ? '#fff' : 'var(--blue)'}" stroke-width="${o.type==='door' ? 9 : 5}" vector-effect="non-scaling-stroke"/>`;
+      if (o.type === 'door') { const r = +o.w; g += `<path d="M ${a[0]} ${a[1]} L ${a[0]+s.nx*r} ${a[1]+s.ny*r} A ${r} ${r} 0 0 ${s.dx*s.ny - s.dy*s.nx > 0 ? 0 : 1} ${b[0]} ${b[1]}" fill="none" stroke="#999" stroke-width="1" vector-effect="non-scaling-stroke"/>`; }
+    });
+    const mx = (s.x1+s.x2)/2 - s.nx*fs*1.6, my = (s.y1+s.y2)/2 - s.ny*fs*1.6;
+    g += `<text x="${mx}" y="${my}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="${i===V.wall && opts.hl ? 'var(--accent)' : '#3b2a1d'}">${esc(s.w.label)}  ${s.w.length ? r0(s.w.length) : '?'}</text>`;
+  });
+  return `<svg viewBox="${minX} ${minY} ${W} ${H}" style="max-height:${opts.maxH||420}px;width:100%">${g}</svg>`;
+}
+function elevSVG(room, w, opts = {}) {
+  const Rl = R_(), L = +w.length || 2400, H = +w.height || 2400, pad = 160, fs = Math.max(L, H) / 24;
+  const Y = z => H - z;
+  let g = `<rect x="0" y="0" width="${L}" height="${H}" fill="#fbfaf8" stroke="#bbb" vector-effect="non-scaling-stroke"/>`;
+  g += `<line x1="${-pad/2}" y1="${H}" x2="${L+pad/2}" y2="${H}" stroke="#3b2a1d" stroke-width="3" vector-effect="non-scaling-stroke"/>`;
+  w.openings.forEach(o => {
+    const z0 = o.type === 'door' ? 0 : +o.sill || 0;
+    g += `<rect x="${+o.x}" y="${Y(z0 + +o.h)}" width="${+o.w}" height="${+o.h}" fill="${o.type==='door' ? '#efe9e1' : '#dbe9f6'}" stroke="${o.type==='door' ? '#8c7a68' : 'var(--blue)'}" vector-effect="non-scaling-stroke"/>`;
+    g += `<text x="${+o.x + +o.w/2}" y="${Y(z0 + +o.h/2)}" font-size="${fs*0.7}" text-anchor="middle" fill="#666">${o.type}</text>`;
+  });
+  w.units.forEach(u => {
+    const z = TYPES[u.type].zone, x = +u.x, uw = +u.w, uh = +u.h;
+    const fill = u.status === 'keep' ? 'var(--keep)' : u.status === 'replace' ? 'var(--repl)' : u.status === 'ask' ? 'var(--ai)' : 'var(--new)';
+    const z0 = z === 'upper' ? +u.elev : Rl.kick;
+    const sel = V.sel === u.id;
+    if (z !== 'upper') g += `<rect x="${x+20}" y="${Y(Rl.kick)}" width="${uw-40}" height="${Rl.kick}" fill="#555"/>`;
+    g += `<g style="cursor:pointer" onclick="V.sel='${u.id}';render()"><rect x="${x}" y="${Y(z0+uh)}" width="${uw}" height="${uh}" fill="${fill}" stroke="${sel ? 'var(--accent)' : '#6b4a2e'}" stroke-width="${sel ? 4 : 1.5}" vector-effect="non-scaling-stroke"/>`;
+    const nd = +u.doors||0, nr = +u.drawers||0;
+    const drawerZone = nr ? (nd ? uh/2 : uh) : 0;
+    for (let i = 1; i < nr; i++) g += `<line x1="${x}" x2="${x+uw}" y1="${Y(z0+uh - drawerZone*i/nr)}" y2="${Y(z0+uh - drawerZone*i/nr)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    if (nr && nd) g += `<line x1="${x}" x2="${x+uw}" y1="${Y(z0+uh/2)}" y2="${Y(z0+uh/2)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    for (let i = 1; i < nd; i++) g += `<line x1="${x+uw*i/nd}" x2="${x+uw*i/nd}" y1="${Y(z0 + (uh-drawerZone))}" y2="${Y(z0)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    g += `<text x="${x+uw/2}" y="${Y(z0+uh/2)}" font-size="${fs*0.8}" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="#3b2a1d">${esc(unitRef(w,u))}</text>`;
+    g += `<text x="${x+uw/2}" y="${Y(z0+uh/2)+fs}" font-size="${fs*0.6}" text-anchor="middle" fill="#3b2a1d">${r0(uw)}</text></g>`;
+    if (z === 'floor') g += `<rect x="${x}" y="${Y(Rl.kick+uh+Rl.worktop)}" width="${uw}" height="${Rl.worktop}" fill="#8d8d8d"/>`;
+  });
+  g += `<text x="${L/2}" y="${H + fs*1.6}" font-size="${fs}" text-anchor="middle" font-weight="700">Wall ${esc(w.label)} — ${w.length ? r0(L) : '? '} mm × ${r0(H)} mm (as seen from inside the room)</text>`;
+  return `<svg viewBox="${-pad} ${-pad} ${L+2*pad} ${H+2*pad+fs}" style="max-height:${opts.maxH||420}px;width:100%">${g}</svg>`;
+}
+function sheetSVG(res, b, idx) {
+  const { m, k } = res, t = +m.trim||0, fs = Math.max(m.L, m.W) / 55;
+  let g = `<rect x="0" y="0" width="${m.L}" height="${m.W}" fill="#f1ece4" stroke="#3b2a1d" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  b.used.forEach(n => {
+    const w = n.w - k, h = n.h - k, x = n.x + t, y = n.y + t;
+    const [pl, pw] = n.r ? [n.p.W, n.p.L] : [n.p.L, n.p.W];
+    g += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--new)" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    if (w > fs*3 && h > fs*1.4) g += `<text x="${x+w/2}" y="${y+h/2}" font-size="${Math.min(fs, h/2.5)}" text-anchor="middle" dominant-baseline="middle">${esc(n.p.ref)} ${esc(n.p.name)} ${pl}×${pw}</text>`;
+  });
+  return `<svg viewBox="-20 -20 ${m.L+40} ${m.W+40}" style="width:100%;max-height:340px">${g}</svg>`;
+}
+
+/* ============ modal ============ */
+function modal(html) { $('#modal').innerHTML = html ? `<div class="back"><div class="box">${html}</div></div>` : ''; }
+
+const TERMS_HTML = () => `
+<h3>Saw Wood Works — Terms &amp; Conditions</h3>
+<p><b>1. Ownership.</b> Saw Wood Works ("the app") was created by and belongs to Sean Warren. All rights are reserved. You may use the app under these terms; you may not copy, sell or redistribute it without Sean Warren's written permission.</p>
+<p><b>2. Licence.</b> Use of the app is a personal, non-transferable licence that the owner may withdraw on 30 days' notice.</p>
+<p><b>3. Measurements and board quantities are estimates.</b> Room sizes, cupboard sizes, cutting lists and board counts are calculated from the information you enter and the build rules in Settings. Always check measurements on site and check the cutting list before cutting any material. The owner is not responsible for wasted material, incorrect cuts, or incorrect quotes.</p>
+<p><b>4. AI photo reading.</b> If you use "Read photos with AI", your room photos are sent to the AI service you choose in Settings, using your own key: Google Gemini (free tier — Google may use what you send on the free tier to improve its products, so don't photograph anything private) or Anthropic Claude (paid on your own account). AI results are guesses — every size it suggests is marked yellow and must be checked by you.</p>
+<p><b>5. Your data.</b> Projects, photos and settings are stored on this device only. Use Settings → Backup to keep a copy. Clearing your browser data will delete them.</p>
+<p><b>6. Changes.</b> These terms may be updated; you will be asked to accept the new version.</p>`;
+
+function termsGate() {
+  const s = S.settings;
+  if (s.agreed && s.agreed.v === TERMS_VERSION) return false;
+  modal(`<h2 style="margin-top:0">Welcome to Saw Wood Works</h2><p class="muted">Please read and accept the terms to start.</p>
+    <div class="terms">${TERMS_HTML()}</div>
+    <div style="margin-top:12px"><label>Your name</label><input id="tName" value="${esc(s.user)}" placeholder="e.g. Sean Warren" style="width:100%"></div>
+    <label style="margin-top:10px;color:var(--ink);font-size:14px"><input type="checkbox" id="tOk"> I have read and accept the Terms &amp; Conditions</label>
+    <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="primary" onclick="acceptTerms()">Accept &amp; continue</button></div>`);
+  return true;
+}
+function acceptTerms() {
+  const n = $('#tName').value.trim();
+  if (!n) return alert('Please enter your name.');
+  if (!$('#tOk').checked) return alert('Please tick the box to accept the terms.');
+  S.settings.user = n; S.settings.agreed = { v:TERMS_VERSION, at:new Date().toISOString(), by:n };
+  if (CLOUD) { ME.agreed = S.settings.agreed; FB.F.updateDoc(FB.F.doc(FB.db, 'users/' + ME.uid), { agreed:S.settings.agreed }).catch(fbErr); }
+  else save();
+  modal(''); render();
+}
+
+/* ============ views ============ */
+function render() {
+  const a = $('#app');
+  renderNav();
+  if (V.view === 'login') { a.innerHTML = viewLogin(); return; }
+  if (V.view === 'bootstrap') { a.innerHTML = viewBootstrap(); return; }
+  if (V.view === 'noaccess' || V.view === 'blocked') { a.innerHTML = viewNoAccess(V.view === 'blocked'); return; }
+  if (CLOUD && (!ME || !ME.role || !DU)) { a.innerHTML = '<p class="muted">Connecting…</p>'; return; }
+  if (V.view === 'users') { a.innerHTML = viewUsers(); return; }
+  if (V.view === 'letterhead') { a.innerHTML = viewLetterhead(); renderNav(); return; }
+  if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
+  if (V.view === 'settings') a.innerHTML = viewSettings();
+  else if (V.view === 'project' && P()) a.innerHTML = viewProject();
+  else if (V.view === 'room' && R()) a.innerHTML = viewRoom();
+  else { V.view = 'projects'; a.innerHTML = viewProjects(); }
+}
+
+function viewProjects() {
+  const list = S.projects.slice().sort((a,b) => (b.updated||'').localeCompare(a.updated||''));
+  return `${asBanner()}<h1>Projects</h1>
+  <div class="card noprint"><div class="row">
+    <div><label>Project / job name</label><input id="npName" placeholder="e.g. Smith kitchen"></div>
+    <div><label>Client</label><input id="npClient" placeholder="Client name"></div>
+    <div><label>Site address</label><input id="npAddr" placeholder="Optional"></div>
+    <button class="primary" onclick="addProject()">+ New project</button></div></div>
+  ${list.length ? `<div class="grid">${list.map(p => `<div class="card" style="cursor:pointer" onclick="go('project',{pid:'${p.id}'})">
+     <b>${esc(p.name)}</b><div class="muted small">${esc(p.client||'')}${p.addr ? ' · '+esc(p.addr) : ''}</div>
+     <div class="small" style="margin-top:6px">${p.rooms.length} room(s) · ${p.rooms.reduce((a,r)=>a+r.walls.reduce((b,w)=>b+w.units.length,0),0)} cupboard(s)</div>
+     <div class="muted small">Updated ${esc((p.updated||'').slice(0,10))}</div></div>`).join('')}</div>`
+   : `<p class="muted">No projects yet. Create one above, then add a room and take photos of it.</p>`}`;
+}
+function addProject() {
+  const name = $('#npName').value.trim(); if (!name) return alert('Enter a project name.');
+  const p = { id:uid(), name, client:$('#npClient').value.trim(), addr:$('#npAddr').value.trim(), rooms:[], created:new Date().toISOString(), updated:new Date().toISOString() };
+  S.projects.push(p); save(); go('project', { pid:p.id });
+}
+function touch() { const p = P(); if (p) p.updated = new Date().toISOString(); save(); }
+
+function viewProject() {
+  const p = P();
+  const parts = p.rooms.flatMap(r => roomParts(r).map(x => ({ ...x, ref: r.name + ' ' + x.ref })));
+  const packs = packAll(parts);
+  return `${asBanner()}${letterheadHTML(LH)}<div class="noprint"><a href="#" onclick="go('projects');return false">← Projects</a></div>
+  <h1>${esc(p.name)}</h1>
+  <div class="card noprint"><div class="row">
+    <div><label>Project name</label><input value="${esc(p.name)}" onchange="P().name=this.value;touch()"></div>
+    <div><label>Client</label><input value="${esc(p.client)}" onchange="P().client=this.value;touch()"></div>
+    <div><label>Site address</label><input value="${esc(p.addr)}" onchange="P().addr=this.value;touch()"></div>
+    <button class="danger" onclick="delProject()">Delete project</button></div></div>
+  <h2>Rooms</h2>
+  <div class="card noprint"><div class="row"><div><label>Room name</label><input id="nrName" placeholder="Kitchen, Main bedroom, Scullery…"></div>
+    <button class="primary" onclick="addRoom()">+ Add room</button></div></div>
+  <div class="grid">${p.rooms.map(r => `<div class="card"><b>${esc(r.name)}</b>
+    <div class="small muted">${SHAPES[r.shape] ? SHAPES[r.shape][0] : ''} · ${r.walls.length} wall(s) · ${r.photos.length} photo(s)</div>
+    <div class="small">${r.walls.reduce((a,w)=>a+w.units.length,0)} cupboard(s)${r.walls.some(w=>w.units.some(u=>u.status==='ask')) ? ' · <span class="tag ask">existing to decide</span>' : ''}</div>
+    <div style="margin:6px 0">${planSVG(r, { maxH:150 })}</div>
+    <div class="row"><button class="primary" onclick="go('room',{rid:'${r.id}',tab:'${r.photos.length || r.walls[0].length ? 'room' : 'photos'}',wall:0,sel:null})">Open</button>
+    <button class="danger small" onclick="delRoom('${r.id}')">Delete</button></div></div>`).join('') || '<p class="muted">No rooms yet.</p>'}</div>
+  ${parts.length ? `<h2>Boards for the whole project</h2>${boardsSummary(packs)}
+    <div class="noprint"><button onclick="window.print()">🖨 Print</button></div>` : ''}`;
+}
+function addRoom() { const n = $('#nrName').value.trim() || 'Room ' + (P().rooms.length + 1); const r = newRoom(n); P().rooms.push(r); touch(); go('room', { rid:r.id, tab:'photos', wall:0, sel:null }); }
+function delProject() { if (confirm('Delete this whole project and all its rooms and photos?')) { S.projects = S.projects.filter(p => p.id !== V.pid); save(); go('projects'); } }
+function delRoom(id) { if (confirm('Delete this room?')) { P().rooms = P().rooms.filter(r => r.id !== id); touch(); render(); } }
+
+function boardsSummary(packs) {
+  return `<div class="card"><table><tr><th>Material</th><th>Sheet size</th><th>Parts</th><th>Boards needed</th><th>Usage</th></tr>
+  ${packs.map(x => `<tr><td>${esc(x.m.name)}</td><td>${x.m.L} × ${x.m.W}</td><td>${x.parts.reduce((a,p)=>a+p.qty,0)}</td>
+    <td class="big" style="font-size:20px">${x.bins.length}</td><td>${r0(x.usage*100)}%</td></tr>
+    ${x.over.length ? `<tr><td colspan="5"><div class="msg bad">${x.over.length} part(s) are bigger than a ${esc(x.m.name)} sheet: ${x.over.map(p=>esc(p.ref+' '+p.name+' '+p.L+'×'+p.W)).join(', ')}</div></td></tr>` : ''}`).join('')}
+  </table></div>`;
+}
+
+/* ---------- room ---------- */
+function viewRoom() {
+  const r = R(), p = P();
+  const tabs = [['photos','1. Photos'],['room','2. Room sizes'],['units','3. Cupboards'],['cut','4. Boards & cut list']];
+  const body = V.tab === 'photos' ? tabPhotos(r) : V.tab === 'room' ? tabRoom(r) : V.tab === 'units' ? tabUnits(r) : tabCut(r);
+  return `${asBanner()}${V.tab === 'cut' ? letterheadHTML(LH) : ''}<div class="noprint"><a href="#" onclick="go('project');return false">← ${esc(p.name)}</a></div>
+  <div class="row" style="align-items:center"><h1 style="margin-right:auto">${esc(r.name)}</h1>
+    <input class="noprint" value="${esc(r.name)}" onchange="R().name=this.value;touch();render()" style="width:200px"></div>
+  <div class="tabs noprint">${tabs.map(([k,l]) => `<button class="${V.tab===k?'on':''}" onclick="go('room',{tab:'${k}'})">${l}</button>`).join('')}</div>
+  ${body}`;
+}
+
+/* Tab 1: photos */
+function tabPhotos(r) {
+  const hasKey = !!aiKey();
+  return `<div class="card">
+    <p style="margin-top:0">Take <b>one photo per wall</b>, standing well back so the whole wall is in the shot. A tape measure or a door in the picture helps the AI guess sizes.</p>
+    <div class="row noprint">
+      <label class="btn primary" style="color:#fff;background:var(--accent);border-color:var(--accent);font-size:15px">📷 Take / upload photos<input type="file" accept="image/*" multiple style="display:none" onchange="addPhotos(this.files)"></label>
+      <button ${!r.photos.length || V.busy ? 'disabled' : ''} onclick="aiRead()">${V.busy ? '<span class="spinner"></span> Reading photos…' : '✨ Read photos with AI'}</button>
+      <button onclick="go('room',{tab:'room'})">Skip — fill in by hand →</button>
+    </div>
+    ${!hasKey ? `<div class="msg warn small">AI reading needs a free Google Gemini key — add it under <a href="#" onclick="go('settings');return false">Settings</a>. You can still fill everything in by hand.</div>` : ''}
+    ${V.aiMsg ? `<div class="msg ${V.aiMsg.startsWith('✔') ? 'ok' : 'bad'}">${esc(V.aiMsg)}</div>` : ''}
+    ${r.ai && r.ai.notes ? `<div class="msg ai"><b>AI notes:</b> ${esc(r.ai.notes)}</div>` : ''}
+  </div>
+  <div class="photos">${r.photos.map((ph, i) => `<figure>${photoSrc(ph) ? `<img src="${photoSrc(ph)}" alt="Room photo ${i+1}">` : `<div class="muted small" style="height:120px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--line);border-radius:8px">Loading photo…</div>`}<button class="small danger noprint" onclick="delPhoto(${i})">✕</button></figure>`).join('')}</div>`;
+}
+function shrink(file) {
+  return new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = () => { const img = new Image(); img.onload = () => {
+      const s = Math.min(1, (CLOUD ? 1280 : 1400) / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = r0(img.width*s); c.height = r0(img.height*s); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', CLOUD ? 0.75 : 0.82)); }; img.onerror = () => res(null); img.src = fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+async function addPhotos(files) {
+  const r = R(), p = P();
+  for (const f of files) {
+    const d = await shrink(f); if (!d) continue;
+    if (CLOUD) { const id = uid() + uid(); PHOTOS[id] = d; r.photos.push('ph:' + id);
+      FB.F.setDoc(FB.F.doc(FB.db, cpath('photos', id)), { pid:p.id, rid:r.id, data:d, at:new Date().toISOString() }).catch(fbErr); }
+    else r.photos.push(d);
+  }
+  touch(); render();
+}
+function delPhoto(i) { const x = R().photos.splice(i, 1)[0]; if (CLOUD && typeof x === 'string' && x.startsWith('ph:')) { delete PHOTOS[x.slice(3)]; FB.F.deleteDoc(FB.F.doc(FB.db, cpath('photos', x.slice(3)))).catch(fbErr); } touch(); render(); }
+
+/* AI — Google Gemini (free tier) or Anthropic Claude (paid) */
+const aiKey = () => (S.settings.provider === 'anthropic' ? S.settings.apiKey : S.settings.geminiKey || '').trim();
+function apiHeaders() { return { 'content-type':'application/json', 'x-api-key':S.settings.apiKey.trim(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' }; }
+const gHeaders = () => ({ 'content-type':'application/json', 'x-goog-api-key': (S.settings.geminiKey||'').trim() });
+async function pickModel(force) {
+  if (S.settings.model && !force) return S.settings.model;
+  let m;
+  if (S.settings.provider === 'anthropic') {
+    const r = await fetch('https://api.anthropic.com/v1/models?limit=50', { headers: apiHeaders() });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
+    const ids = (j.data || []).map(x => x.id);
+    m = ids.find(i => /sonnet/i.test(i)) || ids[0];
+  } else {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: gHeaders() });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
+    const ok = (j.models || []).filter(x => (x.supportedGenerationMethods || []).includes('generateContent'))
+      .map(x => x.name.replace('models/', ''))
+      .filter(n => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|live|audio|thinking|exp|lite/.test(n));
+    const ver = n => parseFloat((n.match(/gemini-([\d.]+)/) || [0, 0])[1]);
+    ok.sort((a, b) => ver(b) - ver(a) || (/preview/.test(a) - /preview/.test(b)) || a.length - b.length);
+    m = ok[0];
+  }
+  if (!m) throw new Error('No suitable model available on this key.');
+  S.settings.model = m; save(); return m;
+}
+async function aiRead() {
+  const r = R();
+  if (!aiKey()) { V.aiMsg = 'Add your free Google Gemini key in Settings first.'; return render(); }
+  V.busy = true; V.aiMsg = ''; render();
+  try {
+    const model = await pickModel();
+    const prompt = `You are helping a South African cabinet maker measure a room for built-in cupboards. These photos show one room (ideally one photo per wall). Work out:
+- how many walls will get cupboards (1 = straight, 2 = L-shape, 3 = U-shape, 4 = full room), labelled A, B, C, D going clockwise, starting with the wall in the first photo
+- for each wall: estimated length and ceiling height in mm, doors and windows (offset from the LEFT end of the wall as seen from inside the room, width, height, and sill height for windows)
+- existing cupboards on each wall: type (base, sink, drawer, wall, tall, wardrobe), offset from the left in mm, width in mm, number of doors and drawers
+Use common sizes as scale references: internal doors are about 813 wide x 2032 high, kitchen worktops about 900 from the floor, base units about 560 deep, wall units about 720 high. If you cannot tell a value, use null. Round to the nearest 10 mm.
+Reply with ONLY JSON, no other text, in this shape:
+{"walls":[{"label":"A","lengthMm":3200,"heightMm":2400,"openings":[{"type":"door","offsetMm":0,"widthMm":813,"heightMm":2032,"sillMm":0}],"existing":[{"type":"base","offsetMm":900,"widthMm":600,"doors":1,"drawers":0}]}],"notes":"short notes on anything the cabinet maker must measure or check"}`;
+    const photos = r.photos.map(photoSrc).filter(Boolean).slice(0, 8).map(d => d.split(',')[1]);
+    if (!photos.length) throw new Error('photos are still loading — try again in a moment');
+    let txt = '';
+    if (S.settings.provider === 'anthropic') {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers: apiHeaders(),
+        body: JSON.stringify({ model, max_tokens: 3000, messages:[{ role:'user', content:[...photos.map(data => ({ type:'image', source:{ type:'base64', media_type:'image/jpeg', data } })), { type:'text', text:prompt }] }] }) });
+      const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
+      txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    } else {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method:'POST', headers: gHeaders(),
+        body: JSON.stringify({ contents:[{ role:'user', parts:[...photos.map(data => ({ inline_data:{ mime_type:'image/jpeg', data } })), { text:prompt }] }],
+                               generationConfig:{ responseMimeType:'application/json', temperature:0.2 } }) });
+      const j = await resp.json();
+      if (!resp.ok) throw new Error(resp.status === 429 ? 'free daily limit reached — try again later' : (j.error?.message || ('HTTP ' + resp.status)));
+      txt = ((j.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+    }
+    const js = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    const n = applyAI(r, js);
+    V.aiMsg = `✔ AI found ${r.walls.length} wall(s) and ${n} existing cupboard(s). Yellow boxes are guesses — measure and correct them.`;
+    touch(); V.busy = false; V.tab = 'room'; render(); nextAsk();
+  } catch (e) { V.busy = false; V.aiMsg = 'AI could not read the photos: ' + e.message; render(); }
+}
+function applyAI(r, js) {
+  const aw = (js.walls || []).slice(0, 4); if (!aw.length) throw new Error('no walls in the reply');
+  r.shape = ['straight','L','U','rect'][aw.length - 1];
+  while (r.walls.length < aw.length) r.walls.push(newWall(r.walls.length));
+  r.walls.length = Math.max(aw.length, 1);
+  r.ai = { notes: js.notes || '', flags: {} };
+  let count = 0;
+  aw.forEach((a, i) => {
+    const w = r.walls[i];
+    if (!w.length && num(a.lengthMm)) { w.length = r0(num(a.lengthMm)); r.ai.flags['len_'+w.id] = 1; }
+    if (num(a.heightMm) && (!w.height || w.height === 2400)) { w.height = r0(num(a.heightMm)); r.ai.flags['h_'+w.id] = 1; }
+    if (!w.openings.length) (a.openings || []).forEach(o => {
+      if (!['door','window'].includes(o.type)) return;
+      w.openings.push({ id:uid(), type:o.type, x:r0(num(o.offsetMm)||0), w:r0(num(o.widthMm)||(o.type==='door'?813:1000)), h:r0(num(o.heightMm)||(o.type==='door'?2032:1000)), sill:r0(num(o.sillMm)||(o.type==='door'?0:900)), ai:true });
+    });
+    (a.existing || []).forEach(e => {
+      const type = TYPES[e.type] ? e.type : 'base';
+      const u = unitDefaults(type);
+      Object.assign(u, { x:r0(num(e.offsetMm)||0), w:r0(num(e.widthMm)||u.w), doors: num(e.doors) ?? u.doors, drawers: num(e.drawers) ?? u.drawers, status:'ask', ai:true });
+      w.units.push(u); count++;
+    });
+  });
+  return count;
+}
+function aiCls(key, obj) { const r = R(); return (obj && obj.ai) || (r.ai && r.ai.flags && r.ai.flags[key]) ? 'ai' : ''; }
+function clearAi(key) { const r = R(); if (r.ai && r.ai.flags) delete r.ai.flags[key]; }
+
+/* existing cupboard decision */
+function nextAsk() {
+  const r = R(); if (!r) return;
+  for (const w of r.walls) for (const u of w.units) if (u.status === 'ask') {
+    modal(`<h2 style="margin-top:0">Existing cupboard found</h2>
+      <p><b>${esc(unitRef(w,u))}</b> on wall ${esc(w.label)} — ${esc(TYPES[u.type].label)}, ${r0(u.w)} mm wide, ${r0(u.x)} mm from the left.</p>
+      <div class="svgbox" style="margin-bottom:10px">${elevSVG(r, w, { maxH:220 })}</div>
+      <p>Do you want to keep it or replace it?</p>
+      <div class="row"><button class="primary" onclick="decide('${w.id}','${u.id}','keep')">Keep it</button>
+      <button class="primary" style="background:var(--bad);border-color:var(--bad)" onclick="decide('${w.id}','${u.id}','replace')">Replace with new</button>
+      <button onclick="decide('${w.id}','${u.id}','remove')">Remove (rip out, nothing new)</button>
+      <button onclick="modal('')">Decide later</button></div>`);
+    return;
+  }
+  modal('');
+}
+function decide(wid, id, what) {
+  const w = R().walls.find(x => x.id === wid), u = w.units.find(x => x.id === id);
+  if (what === 'remove') w.units = w.units.filter(x => x !== u); else u.status = what;
+  touch(); render(); nextAsk();
+}
+
+/* Tab 2: room */
+function tabRoom(r) {
+  return `<div class="card noprint"><b>Room shape</b><div class="chips" style="margin-top:6px">
+    ${Object.entries(SHAPES).map(([k,[l]]) => `<button class="${r.shape===k?'on':''}" onclick="setShape(R(),'${k}')">${l}</button>`).join('')}</div>
+    <p class="small muted" style="margin-bottom:0">Walls are labelled A, B, C… going clockwise. Measure each wall corner to corner. Offsets are measured from the <b>left</b> end of the wall when you face it from inside the room.</p></div>
+  ${r.ai && r.ai.notes ? `<div class="msg ai"><b>AI notes:</b> ${esc(r.ai.notes)}</div>` : ''}
+  <div class="card"><div class="svgbox">${planSVG(r, { hl:true })}</div><div class="small muted" style="margin-top:4px">Plan view from above. Solid = floor cupboards, dashed = wall cupboards, white gap = door, blue = window.</div></div>
+  ${r.walls.map((w, i) => `<div class="card"><h3 style="margin-top:0">Wall ${esc(w.label)}</h3>
+    <div class="row">
+      <div><label>Length (mm)</label><input type="number" class="${aiCls('len_'+w.id)}" value="${w.length ?? ''}" placeholder="?" onchange="setWall(${i},'length',this.value,'len_')"></div>
+      <div><label>Ceiling height (mm)</label><input type="number" class="${aiCls('h_'+w.id)}" value="${w.height ?? ''}" onchange="setWall(${i},'height',this.value,'h_')"></div>
+      ${i < r.walls.length - 1 ? `<div><label>Next wall turns</label><select onchange="R().walls[${i}].turn=this.value;touch();render()"><option value="right" ${w.turn!=='left'?'selected':''}>Right (inside corner)</option><option value="left" ${w.turn==='left'?'selected':''}>Left (outside corner)</option></select></div>` : ''}
+      <button class="small" onclick="addOpening(${i},'door')">+ Door</button><button class="small" onclick="addOpening(${i},'window')">+ Window</button>
+    </div>
+    ${w.openings.length ? `<div class="tablewrap" style="margin-top:8px"><table><tr><th>Type</th><th>From left</th><th>Width</th><th>Height</th><th>Sill</th><th></th></tr>
+      ${w.openings.map((o, j) => `<tr><td>${o.type === 'door' ? '🚪 Door' : '🪟 Window'}</td>
+        ${['x','w','h','sill'].map(f => f === 'sill' && o.type === 'door' ? '<td>—</td>' : `<td><input type="number" class="${o.ai?'ai':''}" value="${o[f]}" onchange="setOpen(${i},${j},'${f}',this.value)"></td>`).join('')}
+        <td><button class="small danger" onclick="R().walls[${i}].openings.splice(${j},1);touch();render()">✕</button></td></tr>`).join('')}</table></div>` : ''}
+  </div>`).join('')}
+  <div class="row noprint"><button class="primary" onclick="go('room',{tab:'units'})">Next: add cupboards →</button></div>`;
+}
+function setWall(i, f, v, flag) { const w = R().walls[i]; w[f] = num(v); clearAi(flag + w.id); touch(); render(); }
+function setOpen(i, j, f, v) { const o = R().walls[i].openings[j]; o[f] = num(v) ?? 0; delete o.ai; touch(); render(); }
+function addOpening(i, type) { R().walls[i].openings.push({ id:uid(), type, x:0, w:type==='door'?813:1000, h:type==='door'?2032:1000, sill:type==='door'?0:1000 }); touch(); render(); }
+
+/* Tab 3: cupboards */
+function tabUnits(r) {
+  if (V.wall >= r.walls.length) V.wall = 0;
+  const w = r.walls[V.wall], warns = wallWarnings(w);
+  const asks = r.walls.reduce((a, x) => a + x.units.filter(u => u.status === 'ask').length, 0);
+  return `<div class="chips noprint" style="margin-bottom:10px">${r.walls.map((x, i) => `<button class="${i===V.wall?'on':''}" onclick="go('room',{wall:${i},sel:null})">Wall ${esc(x.label)} (${x.units.length})</button>`).join('')}</div>
+  ${asks ? `<div class="msg ai noprint">${asks} existing cupboard(s) still need a keep / replace decision. <button class="small" onclick="nextAsk()">Decide now</button></div>` : ''}
+  <div class="card"><div class="svgbox">${elevSVG(r, w)}</div>
+    <div class="small muted" style="margin-top:4px">Tap a cupboard to edit it. <span class="tag new">new</span> <span class="tag keep">keep existing</span> <span class="tag replace">replace existing</span> <span class="tag ask">decide</span></div>
+    ${warns.map(([k, t]) => `<div class="msg ${k}">${esc(t)}</div>`).join('')}</div>
+  <div class="card noprint"><b>Add a new cupboard to wall ${esc(w.label)}</b><div class="row" style="margin-top:6px">
+    ${Object.entries(TYPES).map(([k, t]) => `<button onclick="addUnit('${k}')">+ ${t.label}</button>`).join('')}
+    <button onclick="addExisting()" style="border-style:dashed">+ Mark an existing cupboard</button></div>
+    <div class="small muted" style="margin-top:6px">New cupboards are placed at the end of the run. Change the "From left" and "Width" boxes to move or resize them.</div></div>
+  <div class="card"><div class="tablewrap"><table>
+    <tr><th>Ref</th><th>Type</th><th>From left</th><th>Width</th><th>Height</th><th>Depth</th><th>Height off floor</th><th>Doors</th><th>Shelves</th><th>Drawers</th><th>Status</th><th></th></tr>
+    ${w.units.map((u, j) => `<tr class="${V.sel===u.id?'sel':''}" onclick="if(V.sel!=='${u.id}'){V.sel='${u.id}'}">
+      <td><b>${esc(unitRef(w,u))}</b></td>
+      <td><select onchange="setUnit(${j},'type',this.value)">${Object.entries(TYPES).map(([k,t]) => `<option value="${k}" ${u.type===k?'selected':''}>${t.label}</option>`).join('')}</select></td>
+      ${['x','w','h','d'].map(f => `<td><input type="number" class="${u.ai && (f==='x'||f==='w') ? 'ai' : ''}" value="${u[f]}" onchange="setUnit(${j},'${f}',this.value)"></td>`).join('')}
+      <td>${TYPES[u.type].zone === 'upper' ? `<input type="number" value="${u.elev}" onchange="setUnit(${j},'elev',this.value)">` : `<span class="muted small">on kick</span>`}</td>
+      ${['doors','shelves','drawers'].map(f => `<td><input type="number" min="0" style="width:60px" value="${u[f]}" onchange="setUnit(${j},'${f}',this.value)"></td>`).join('')}
+      <td><select onchange="setUnit(${j},'status',this.value)">${Object.entries(STATUS).map(([k,l]) => `<option value="${k}" ${u.status===k?'selected':''}>${l}</option>`).join('')}</select></td>
+      <td><button class="small danger" onclick="delUnit(${j})">✕</button></td></tr>`).join('') || `<tr><td colspan="12" class="muted">No cupboards on this wall yet.</td></tr>`}
+  </table></div></div>
+  <div class="row noprint"><button class="primary" onclick="go('room',{tab:'cut'})">Next: boards & cut list →</button></div>`;
+}
+function curWall() { return R().walls[V.wall]; }
+function addUnit(type) { const w = curWall(), u = unitDefaults(type); u.x = laneEnd(w, type); w.units.push(u); V.sel = u.id; touch(); render(); }
+function addExisting() { const w = curWall(), u = unitDefaults('base'); u.x = laneEnd(w, 'base'); u.status = 'ask'; w.units.push(u); V.sel = u.id; touch(); render();
+  modal(`<h2 style="margin-top:0">Existing cupboard added</h2><p>Set its type, position and width in the table, then choose <b>Keep</b> or <b>Replace</b> in the Status column — or decide now:</p>
+  <div class="row"><button class="primary" onclick="decide('${w.id}','${u.id}','keep')">Keep it</button><button class="primary" style="background:var(--bad);border-color:var(--bad)" onclick="decide('${w.id}','${u.id}','replace')">Replace with new</button><button onclick="modal('')">Set sizes first</button></div>`); }
+function setUnit(j, f, v) {
+  const u = curWall().units[j];
+  if (f === 'type') {
+    const d = unitDefaults(v); Object.assign(u, { type:v, h:d.h, d:d.d, elev:d.elev, doors:d.doors, shelves:d.shelves, drawers:d.drawers });
+  } else if (f === 'status') u.status = v;
+  else { u[f] = num(v) ?? 0; if (f === 'x' || f === 'w') delete u.ai; }
+  V.sel = u.id; touch(); render();
+}
+function delUnit(j) { curWall().units.splice(j, 1); V.sel = null; touch(); render(); }
+
+/* Tab 4: cut list */
+function tabCut(r) {
+  const roles = roomMats(r), parts = roomParts(r), packs = packAll(parts);
+  const asks = r.walls.reduce((a, x) => a + x.units.filter(u => u.status === 'ask').length, 0);
+  const kept = r.walls.reduce((a, x) => a + x.units.filter(u => u.status === 'keep').length, 0);
+  const matSel = role => `<select onchange="R().mats=Object.assign(R().mats||{}, {${role}:this.value});touch();render()">${S.settings.materials.map(m => `<option value="${m.id}" ${roles[role]===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select>`;
+  const groups = {};
+  parts.forEach(p => (groups[p.ref] = groups[p.ref] || []).push(p));
+  return `${asks ? `<div class="msg ai noprint">${asks} existing cupboard(s) are not decided yet and are left out of the cut list. <button class="small" onclick="nextAsk()">Decide now</button></div>` : ''}
+  ${kept ? `<div class="msg ok">${kept} existing cupboard(s) are being kept, so they're not in the cut list.</div>` : ''}
+  <div class="card noprint"><div class="row">
+    <div><label>Carcass board</label>${matSel('carcass')}</div><div><label>Doors &amp; drawer fronts</label>${matSel('doors')}</div><div><label>Backs &amp; drawer bottoms</label>${matSel('backs')}</div>
+    <button onclick="window.print()">🖨 Print cut list &amp; drawings</button></div></div>
+  ${parts.length ? `<h2>Boards needed — ${esc(r.name)}</h2>${boardsSummary(packs)}` : `<p class="muted">No new or replacement cupboards in this room yet.</p>`}
+  <h2>Drawings</h2><div class="card"><div class="svgbox">${planSVG(r, { maxH:360 })}</div></div>
+  ${r.walls.filter(w => w.units.length || w.openings.length).map(w => `<div class="card"><div class="svgbox">${elevSVG(r, w, { maxH:360 })}</div></div>`).join('')}
+  ${parts.length ? `<h2>Cut list</h2><div class="card"><div class="tablewrap"><table><tr><th>Cupboard</th><th>Part</th><th>Length</th><th>Width</th><th>Qty</th><th>Material</th></tr>
+    ${Object.entries(groups).map(([ref, ps]) => ps.map((p, i) => `<tr><td>${i === 0 ? `<b>${esc(ref)}</b>` : ''}</td><td>${esc(p.name)}</td><td>${p.L}</td><td>${p.W}</td><td>${p.qty}</td><td class="small">${esc((mat(p.matId)||{}).name || '?')}</td></tr>`).join('')).join('')}
+    </table></div></div>
+  <h2>Cutting layouts</h2>
+  ${packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i+1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm, trim ${x.m.trim} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('')}
+  <p class="small muted">Sizes follow the build rules in Settings (board ${R_().t} mm, back ${R_().back} mm, kick ${R_().kick} mm, door gap ${R_().gap} mm). Check before cutting.</p>` : ''}`;
+}
+
+/* ---------- settings ---------- */
+function viewSettings() {
+  const s = S.settings, Rl = s.rules;
+  const rule = (k, l) => `<div><label>${l}</label><input type="number" value="${Rl[k]}" onchange="S.settings.rules['${k}']=num(this.value)??0;save()"></div>`;
+  return `${CLOUD ? asBanner() : ''}<h1>Settings</h1>${accountCard()}
+  <div class="card"><h3 style="margin-top:0">Build rules (mm)</h3><p class="small muted">How your cupboards are made. Sides run full height; tops, bottoms and shelves fit between the sides; backs are nailed on full size.</p>
+    <div class="row">${rule('t','Board thickness')}${rule('back','Back thickness')}${rule('kick','Kick height')}${rule('worktop','Worktop thickness')}${rule('railW','Top rail width')}${rule('shelfSet','Shelf set-back')}${rule('gap','Door gap')}</div>
+    <div class="row" style="margin-top:8px">${rule('baseH','Base carcass height')}${rule('baseD','Base depth')}${rule('wallH','Wall unit height')}${rule('wallD','Wall unit depth')}${rule('wallElev','Wall unit height off floor')}${rule('tallH','Tall carcass height')}${rule('tallD','Tall depth')}</div>
+    <div class="row" style="margin-top:8px">${rule('slide','Drawer runner clearance (total)')}${rule('drawerClear','Drawer box below front')}</div>
+    <div style="margin-top:8px"><button class="small" onclick="if(confirm('Reset build rules to defaults?')){S.settings.rules=JSON.parse(JSON.stringify(DEF_SETTINGS.rules));save();render()}">Reset to defaults</button></div></div>
+  <div class="card"><h3 style="margin-top:0">Board materials</h3><div class="tablewrap"><table><tr><th>Name</th><th>Length</th><th>Width</th><th>Saw kerf</th><th>Edge trim</th><th>Can rotate</th><th></th></tr>
+    ${s.materials.map((m, i) => `<tr><td><input value="${esc(m.name)}" style="width:240px" onchange="S.settings.materials[${i}].name=this.value;save()"></td>
+      ${['L','W','kerf','trim'].map(f => `<td><input type="number" value="${m[f]}" onchange="S.settings.materials[${i}]['${f}']=num(this.value)??0;save()"></td>`).join('')}
+      <td><input type="checkbox" ${m.rotate?'checked':''} onchange="S.settings.materials[${i}].rotate=this.checked;save()"></td>
+      <td><button class="small danger" onclick="delMat(${i})">✕</button></td></tr>`).join('')}</table></div>
+    <button class="small" style="margin-top:8px" onclick="S.settings.materials.push({id:uid(),name:'New board',L:2750,W:1830,kerf:4,trim:10,rotate:true});save();render()">+ Add material</button>
+    <div class="row" style="margin-top:10px">${['carcass','doors','backs'].map(role => `<div><label>Default ${role === 'backs' ? 'backs' : role} board</label><select onchange="S.settings.roles['${role}']=this.value;save()">${s.materials.map(m => `<option value="${m.id}" ${s.roles[role]===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>`).join('')}</div></div>
+  <div class="card"><h3 style="margin-top:0">AI photo reading</h3>
+    <div class="row"><div><label>AI service</label><select onchange="S.settings.provider=this.value;S.settings.model='';save();render()">
+      <option value="gemini" ${s.provider!=='anthropic'?'selected':''}>Google Gemini — free</option>
+      <option value="anthropic" ${s.provider==='anthropic'?'selected':''}>Anthropic Claude — paid</option></select></div></div>
+    ${s.provider !== 'anthropic' ? `<p class="small muted">Free key: go to <b>aistudio.google.com</b>, sign in with a Google account, click <b>Get API key → Create API key</b>, and paste it below. No card needed. The free tier has a daily limit, and Google may use free-tier photos to improve its products.</p>
+    <div class="row"><div style="flex:1;min-width:240px"><label>Google Gemini API key</label><input type="password" style="width:100%" value="${esc(s.geminiKey||'')}" placeholder="AIza…" onchange="S.settings.geminiKey=this.value.trim();S.settings.model='';save()"></div>`
+    : `<p class="small muted">Get a key at console.anthropic.com — usage is billed to that account.</p>
+    <div class="row"><div style="flex:1;min-width:240px"><label>Anthropic API key</label><input type="password" style="width:100%" value="${esc(s.apiKey)}" placeholder="sk-ant-…" onchange="S.settings.apiKey=this.value.trim();S.settings.model='';save()"></div>`}
+    <div><label>Model</label><input value="${esc(s.model)}" placeholder="auto" onchange="S.settings.model=this.value.trim();save()" style="width:220px"></div>
+    <button onclick="testKey()">Test key</button></div><div class="small muted">Keys are stored only on this device.</div><div id="keyMsg"></div></div>
+  <div class="card"><h3 style="margin-top:0">Backup</h3><div class="row">
+    <button onclick="exportData()">⬇ Download backup</button>
+    <label class="btn">⬆ Restore backup<input type="file" accept=".json,application/json" style="display:none" onchange="importData(this.files[0])"></label></div></div>
+  <div class="card"><h3 style="margin-top:0">Terms &amp; Conditions</h3><p class="small">Accepted by <b>${esc(s.agreed?.by||'')}</b> on ${esc((s.agreed?.at||'').slice(0,10))}.</p>
+    <details><summary>Read terms</summary><div class="terms">${TERMS_HTML()}</div></details></div>`;
+}
+function delMat(i) {
+  const m = S.settings.materials[i];
+  if (S.settings.materials.length < 2) return alert('You need at least one material.');
+  if (!confirm('Delete ' + m.name + '?')) return;
+  S.settings.materials.splice(i, 1);
+  const first = S.settings.materials[0].id;
+  Object.keys(S.settings.roles).forEach(k => { if (S.settings.roles[k] === m.id) S.settings.roles[k] = first; });
+  save(); render();
+}
+async function testKey() {
+  const el = $('#keyMsg'); el.innerHTML = '<span class="spinner"></span> Checking…';
+  try { const m = await pickModel(true); render(); $('#keyMsg').innerHTML = `<div class="msg ok">Key works. Using model ${esc(m)}.</div>`; }
+  catch (e) { el.innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
+}
+function exportData() {
+  const blob = new Blob([JSON.stringify({ app:'Saw Wood Works', v:1, at:new Date().toISOString(), data: { ...S, settings: { ...S.settings, apiKey:'', geminiKey:'' } } })], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'saw-wood-works-backup-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
+}
+function importData(f) {
+  if (!f) return; const fr = new FileReader();
+  fr.onload = () => { try { const j = JSON.parse(fr.result); if (!j.data || !Array.isArray(j.data.projects)) throw 0;
+      if (!confirm(`Replace everything on this device with the backup from ${(j.at||'').slice(0,10)} (${j.data.projects.length} projects)?`)) return;
+      const key = S.settings.apiKey, gk = S.settings.geminiKey; S = { settings: mergeSettings(j.data.settings), projects: j.data.projects }; S.settings.apiKey = key; S.settings.geminiKey = gk; save(); go('projects');
+    } catch (e) { alert('That file is not a Saw Wood Works backup.'); } };
+  fr.readAsText(f);
+}
+
+/* ============ start ============ */
+(async function start() {
+  await DB.open();
+  const st = await DB.get('state');
+  if (CLOUD) {
+    LOCAL = st && st.projects && st.projects.length ? st : null;
+    S = { settings: mergeSettings(null), projects: [] };
+    $('#app').innerHTML = '<p class="muted">Connecting to the server…</p>';
+    const go2 = () => { if (window.FB) startCloud(); else $('#app').innerHTML = `<div class="msg bad">Could not load the server connection (${esc(window.FB_ERROR && window.FB_ERROR.message || 'check your internet')}). Reload to try again.</div>`; };
+    if (window.FB || window.FB_ERROR) go2(); else window.fbReady = go2;
+    return;
+  }
+  S = { settings: mergeSettings(st && st.settings), projects: (st && st.projects) || [] };
+  render(); termsGate();
+})();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
