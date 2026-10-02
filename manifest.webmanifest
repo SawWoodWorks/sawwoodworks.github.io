@@ -1,2 +1,22 @@
-{"name":"Saw Wood Works","short_name":"Saw Wood Works","start_url":"./","scope":"./","display":"standalone","background_color":"#f6f3ee","theme_color":"#3b2a1d",
- "icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
+{
+  "name": "S.A.W Woodworks",
+  "short_name": "S.A.W Woodworks",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1d1c18",
+  "theme_color": "#1d1c18",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

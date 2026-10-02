@@ -3,41 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Saw Wood Works</title>
+<title>S.A.W Woodworks</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#3b2a1d">
+<meta name="theme-color" content="#1d1c18">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{
-  --bg:#f6f3ee;--card:#fff;--ink:#2b2520;--muted:#7a6f66;--line:#e2dbd2;
-  --accent:#9a5b2a;--accent2:#c98a4b;--ok:#2f7d4f;--warn:#b7791f;--bad:#b23b3b;
-  --ai:#fff4c2;--new:#e9c9a1;--keep:#d6d3cf;--repl:#f3c1c1;--blue:#3a78b5;
+  --bg:#1d1c18;--card:#27241f;--card2:#302c26;--ink:#ece5d8;--muted:#9d9485;--line:#3d3830;
+  --accent:#b8783f;--accent2:#d9a46a;--ok:#5fb37f;--warn:#e0a84a;--bad:#e06a6a;
+  --ai:#4a4120;--new:#6b4f2c;--keep:#4a4640;--repl:#6a3434;--blue:#6ea4dc;--banner:#77736b;
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header{background:#3b2a1d;color:#fff;display:flex;align-items:center;gap:12px;padding:10px 16px;position:sticky;top:0;z-index:5}
-header .logo{font-weight:800;letter-spacing:.5px;font-size:18px;cursor:pointer;display:flex;align-items:center;gap:8px}
-header .logo span{background:var(--accent2);color:#3b2a1d;border-radius:6px;padding:2px 6px;font-size:13px}
-header nav{margin-left:auto;display:flex;gap:6px}
-header nav button{background:transparent;color:#fff;border:1px solid #ffffff44}
+header{background:var(--bg);color:var(--ink);max-width:1200px;margin:0 auto;padding:14px 16px 0}
+.banner{background:var(--banner);color:#f4f1ea;border-radius:12px;display:flex;align-items:center;gap:22px;padding:18px 26px;cursor:pointer}
+.banner .bl{flex:1;min-width:0}.banner .bn{font-size:20px;font-weight:800;letter-spacing:.2px}
+.banner .ba{font-size:13px;color:#e4dfd5;margin-top:3px;line-height:1.4}
+.banner .bm{font:12px/1.5 ui-monospace,Consolas,monospace;color:#ece8e0;margin-top:5px}
+.banner .bdiv{align-self:stretch;width:1px;background:#ffffff40}
+.banner .br{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:150px;color:#f4f1ea}
+.banner .br svg{height:46px;width:auto}.banner .bt{font-size:24px;letter-spacing:8px;font-weight:300;margin-right:-8px;line-height:1}
+.banner .bs{font-size:10px;letter-spacing:4px;font-weight:700;margin-right:-4px}
+.topnav{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;align-items:center;gap:6px;padding:10px 0 4px;border-bottom:1px solid var(--line)}
+header nav{display:flex;gap:6px;flex-wrap:wrap}
+header nav button{background:transparent;color:var(--ink);border:1px solid var(--line)}
+header nav button.on{background:var(--card2);border-color:var(--accent2);color:var(--accent2)}
 main{max-width:1200px;margin:0 auto;padding:16px}
 h1{font-size:22px;margin:4px 0 12px}h2{font-size:18px;margin:18px 0 8px}h3{font-size:15px;margin:12px 0 6px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
-button,.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 12px;cursor:pointer}
+button,.btn{font:inherit;border-radius:8px;border:1px solid var(--line);background:var(--card2);color:var(--ink);padding:7px 12px;cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button.danger{color:var(--bad);border-color:#e7b9b9}
+button.danger{color:var(--bad)}
 button.small{padding:3px 8px;font-size:13px}
 button:disabled{opacity:.5;cursor:default}
-input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink);max-width:100%}
+input,select,textarea{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#1a1915;color:var(--ink);max-width:100%}
 input[type=number]{width:90px}
-input.ai,select.ai{background:var(--ai);border-color:#e0c25a}
+input.ai,select.ai{background:var(--ai);border-color:#a8923a}
 label{font-size:13px;color:var(--muted);display:block}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 14px}
 .tabs button{border-radius:20px}
 .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+a{color:var(--accent2)}
 .muted{color:var(--muted)}.small{font-size:13px}
 table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;font-size:14px;vertical-align:middle}
@@ -48,34 +58,36 @@ th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.3p
 .photos img{width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .photos figure button{position:absolute;top:4px;right:4px}
 .msg{padding:9px 12px;border-radius:8px;margin:8px 0;font-size:14px}
-.msg.warn{background:#fff3dc;border:1px solid #f0d199}
-.msg.bad{background:#fde8e8;border:1px solid #efb6b6}
-.msg.ok{background:#e6f4ec;border:1px solid #b5dcc4}
-.msg.ai{background:var(--ai);border:1px solid #e0c25a}
+.msg.warn{background:#3d3220;border:1px solid #7a6233}
+.msg.bad{background:#3d2424;border:1px solid #7a3d3d}
+.msg.ok{background:#213a2b;border:1px solid #3d6e50}
+.msg.ai{background:var(--ai);border:1px solid #a8923a}
 .chips{display:flex;gap:6px;flex-wrap:wrap}
-.chips button.on{background:#3b2a1d;color:#fff}
+.chips button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 svg{max-width:100%;height:auto;display:block}
-.svgbox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto}
-tr.sel td{background:#fbf1e4}
+.svgbox{background:#f4f1ec;border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto}
+tr.sel td{background:#3a3024}
+main svg:not(.ico){background:#f4f1ec;border-radius:6px;--ink:#2b2520;--muted:#7a6f66;--line:#e2dbd2;--ai:#fff4c2;--new:#e9c9a1;--keep:#d6d3cf;--repl:#f3c1c1;--blue:#3a78b5;--accent:#9a5b2a;--accent2:#c98a4b;--bad:#b23b3b;--ok:#2f7d4f;--warn:#b7791f}
+.svgbox,.card svg{color:#2b2520}
+.paper svg{background:none}
+@media screen{#app > .lh{display:none}}
+button.danger{border-color:#7a3d3d}
 .tag{display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px}
 .tag.new{background:var(--new)}.tag.keep{background:var(--keep)}.tag.replace{background:var(--repl)}.tag.ask{background:var(--ai)}
 #modal .back{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
-#modal .box{background:#fff;border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:18px}
-.terms{max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:14px;background:#fcfbf9}
+#modal .box{background:var(--card);border:1px solid var(--line);border-radius:12px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:18px}
+.terms{max-height:45vh;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:14px;background:#1a1915}
 .big{font-size:28px;font-weight:800}
 .spinner{display:inline-block;width:14px;height:14px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
-@media (max-width:640px){main{padding:10px}header nav button{padding:5px 8px;font-size:13px}}
-@media print{header,.noprint,#modal{display:none!important}body{background:#fff}.card{border:none;padding:0;break-inside:avoid}main{max-width:none}}
+@media (max-width:640px){main{padding:10px}header{padding:10px 10px 0}header nav button{padding:5px 8px;font-size:13px}.banner{padding:12px 14px;gap:12px}.banner .bn{font-size:16px}.banner .ba,.banner .bm{font-size:11px}.banner .br{min-width:90px}.banner .br svg{height:30px}.banner .bt{font-size:16px;letter-spacing:5px;margin-right:-5px}.banner .bs{font-size:8px;letter-spacing:2px}}
+@media print{header,.noprint,#modal,#toast{display:none!important}body{background:#fff;color:#222}.card{background:#fff;color:#222}.card{border:none;padding:0;break-inside:avoid}main{max-width:none}}
 </style>
 </head>
 <body>
 <header>
-  <div class="logo" onclick="go('projects')">🪚 Saw Wood Works <span>v1</span></div>
-  <nav>
-    <button onclick="go('projects')">Projects</button>
-    <button onclick="go('settings')">Settings</button>
-  </nav>
+  <div class="banner" id="banner" onclick="go('projects')"></div>
+  <div class="topnav"><nav></nav></div>
 </header>
 <main id="app"><p class="muted">Loading…</p></main>
 <div id="modal"></div>
@@ -171,7 +183,7 @@ function save() {
 }
 const cpath = (...p) => ['users', dataUid(), ...p].join('/');
 const fbErr = e => { console.error(e); toast('⚠ Could not save to the server: ' + (e.code || e.message)); };
-function toast(t) { let el = $('#toast'); if (!el) { el = document.createElement('div'); el.id = 'toast'; el.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#3b2a1d;color:#fff;padding:9px 14px;border-radius:8px;z-index:30;font-size:14px;max-width:90vw'; document.body.appendChild(el); } el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 4500); }
+function toast(t) { let el = $('#toast'); if (!el) { el = document.createElement('div'); el.id = 'toast'; el.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#3a352d;color:var(--ink);border:1px solid var(--line);padding:9px 14px;border-radius:8px;z-index:30;font-size:14px;max-width:90vw'; document.body.appendChild(el); } el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 4500); }
 function cloudSettings() { const s = { ...S.settings }; delete s.user; delete s.agreed; return JSON.stringify(s); }
 function defaultSettings() { const s = mergeSettings(null); delete s.user; delete s.agreed; return JSON.parse(JSON.stringify(s)); }
 function cloudFlush() {
@@ -312,7 +324,7 @@ function viewLogin() {
     <div id="lgMsg"></div>
     <div class="row" style="margin-top:12px"><button class="primary" onclick="doLogin()">Sign in</button>
     <button class="small" style="border:none;color:var(--accent)" onclick="doReset()">Forgot password?</button></div>
-    ${ROOT === null ? `<hr style="border:none;border-top:1px solid var(--line);margin:16px 0"><p class="small"><b>First time setting up Saw Wood Works?</b> Type the email and password for the <b>root (administrator)</b> account above, then press:</p>
+    ${ROOT === null ? `<hr style="border:none;border-top:1px solid var(--line);margin:16px 0"><p class="small"><b>First time setting up S.A.W Woodworks?</b> Type the email and password for the <b>root (administrator)</b> account above, then press:</p>
       <button onclick="doRootSignup()">Create root account</button><p class="small muted">${PW_HINT}</p>`
       : `<p class="small muted">Accounts are created by the administrator.</p>`}</div>`;
 }
@@ -326,7 +338,7 @@ async function doReset() { const [e] = lgVals(); if (!e) return lgShow('Type you
 async function doRootSignup() { const [e, p] = lgVals(); if (!e) return lgShow('Enter an email.'); const bad = pwProblem(p); if (bad) return lgShow(bad);
   try { await FB.A.createUserWithEmailAndPassword(FB.auth, e, p); } catch (x) { lgShow(authMsg(x)); } }
 function viewBootstrap() {
-  return `<div class="card" style="max-width:520px;margin:30px auto"><h1 style="margin-top:0">Set up Saw Wood Works</h1>
+  return `<div class="card" style="max-width:520px;margin:30px auto"><h1 style="margin-top:0">Set up S.A.W Woodworks</h1>
     <p>This is the first account, so <b>${esc(ME.email)}</b> becomes the <b>root administrator</b>. Root creates all other users, resets passwords and can see everything.</p>
     <label>Your name</label><input id="bsName" style="width:100%" placeholder="e.g. Sean Warren"><div id="bsMsg"></div>
     <div class="row" style="margin-top:12px"><button class="primary" onclick="bootstrapRoot()">Make me root</button><button onclick="FB.A.signOut(FB.auth)">Cancel</button></div></div>`;
@@ -348,7 +360,7 @@ async function bootstrapRoot() {
 }
 function viewNoAccess(blocked) {
   return `<div class="card" style="max-width:480px;margin:30px auto"><h1 style="margin-top:0">${blocked ? 'Account blocked' : 'No access yet'}</h1>
-    <p>${blocked ? 'Your account has been blocked.' : 'This login has not been set up in Saw Wood Works.'} Please contact the administrator.</p>
+    <p>${blocked ? 'Your account has been blocked.' : 'This login has not been set up in S.A.W Woodworks.'} Please contact the administrator.</p>
     <button onclick="FB.A.signOut(FB.auth)">Sign out</button></div>`;
 }
 
@@ -427,6 +439,7 @@ function letterheadHTML(lh, opts = {}) {
   const text = `<div style="font-size:22px;font-weight:800;color:${c}">${esc(lh.bizName || '')}</div>
     <div class="small" style="line-height:1.4">${esc(lh.address || '').replace(/\n/g, '<br>')}${contact ? '<br>' + contact : ''}${reg ? '<br>' + reg : ''}</div>`;
   const inner = layout === 'center' ? `<div style="text-align:center">${logo ? `<div>${logo}</div>` : ''}${text}</div>`
+    : layout === 'top' ? `<div>${logo ? `<div style="margin-bottom:6px">${logo}</div>` : ''}${text}</div>`
     : `<div style="display:flex;gap:16px;align-items:center;${layout === 'right' ? 'flex-direction:row-reverse;text-align:right' : ''}">${logo}<div style="flex:1">${text}</div></div>`;
   return `<div class="lh" style="background:#fff;color:#222;padding:12px 14px;border-bottom:4px solid ${c};margin-bottom:12px;border-radius:6px 6px 0 0">${inner}
     ${lh.footer ? `<div class="small" style="margin-top:6px;color:#666">${esc(lh.footer)}</div>` : ''}</div>`;
@@ -446,7 +459,7 @@ function viewLetterhead() {
         ? `<textarea rows="3" style="width:100%" oninput="LHD.${k}=this.value;lhPrev()">${esc(d[k] || '')}</textarea>`
         : `<input style="width:100%" value="${esc(d[k] || '')}" oninput="LHD.${k}=this.value;lhPrev()">`}`).join('')}
       <div class="row" style="margin-top:8px"><div><label>Colour</label><input type="color" value="${safeColour(d.colour)}" oninput="LHD.colour=this.value;lhPrev()"></div>
-        <div><label>Layout</label><select onchange="LHD.layout=this.value;lhPrev()">${[['left','Logo left'],['center','Centred'],['right','Logo right']].map(([v, l]) => `<option value="${v}" ${d.layout === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+        <div><label>Layout</label><select onchange="LHD.layout=this.value;lhPrev()">${[['left','Logo left'],['top','Logo on top'],['center','Centred'],['right','Logo right']].map(([v, l]) => `<option value="${v}" ${d.layout === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
     </div>
     <div style="flex:1.3;min-width:280px"><label>Preview</label><div id="lhPrev" style="border:1px solid var(--line);border-radius:8px;background:#fff">${letterheadHTML(d) || '<p class="muted" style="padding:12px">Fill in your business name or upload a logo.</p>'}</div></div>
   </div>
@@ -477,16 +490,24 @@ async function lhSave(finish) {
     LH = clean; LHD = null; toast('Letterhead saved.'); renderHeader(); go('projects');
   } catch (e) { fbErr(e); }
 }
+const APP_LOGO = '<svg xmlns="http://www.w3.org/2000/svg" class="ico" viewBox="0 0 240 124"><polygon points="38,112 38.0,112.0 20.7,100.6 32.8,100.3 38.8,100.3 23.3,86.6 35.3,88.1 41.3,88.9 27.9,73.1 39.6,76.2 45.4,77.9 34.4,60.4 45.5,65.2 51.0,67.7 42.6,48.7 52.9,55.0 58.0,58.3 52.4,38.3 61.7,46.1 66.3,50.0 63.6,29.5 71.7,38.4 75.7,43.0 75.9,22.3 82.6,32.3 85.9,37.4 89.1,16.9 94.4,27.8 96.9,33.3 102.9,13.5 106.6,25.0 108.3,30.8 117.1,12.0 119.1,24.0 120.0,30.0 131.4,12.7 131.7,24.8 131.7,30.8 145.4,15.3 143.9,27.3 143.1,33.3 158.9,19.9 155.8,31.6 154.1,37.4 171.6,26.4 166.8,37.5 164.3,43.0 183.3,34.6 177.0,44.9 173.7,50.0 193.7,44.4 185.9,53.7 182.0,58.3 202.5,55.6 193.6,63.7 189.0,67.7 209.7,67.9 199.7,74.6 194.6,77.9 215.1,81.1 204.2,86.4 198.7,88.9 218.5,94.9 207.0,98.6 201.2,100.3 220.0,109.1 208.0,111.1 202.0,112.0" fill="#f4f1ea"/><path d="M50,112 A70,70 0 0 1 190,112" fill="none" stroke="#77736b" stroke-width="3"/><path d="M98,112 A22,22 0 0 1 142,112 Z" fill="#77736b"/><path d="M105,112 A15,15 0 0 1 135,112" fill="none" stroke="#f4f1ea" stroke-width="3"/><rect x="6" y="112" width="228" height="8" fill="#f4f1ea"/></svg>';
 function renderHeader() {
-  const el = document.querySelector('header .logo'); if (!el) return;
-  el.innerHTML = LH && (LH.logo || LH.bizName)
-    ? `${LH.logo ? `<img src="${LH.logo}" alt="" style="height:30px;max-width:120px;object-fit:contain;background:#fff;border-radius:4px;padding:2px">` : ''}<span style="background:none;color:#fff;font-size:16px;padding:0">${esc(LH.bizName || '')}</span><span>Saw Wood Works</span>`
-    : '🪚 Saw Wood Works <span>v1</span>';
+  const el = document.getElementById('banner'); if (!el) return;
+  const lh = LH || {};
+  const name = lh.bizName || 'S.A.W Woodworks';
+  const addr = (lh.address || '').split('\n').filter(Boolean).join(', ');
+  const contact = [lh.phone, lh.email, lh.web].filter(Boolean).join('  ·  ');
+  const mono = [lh.vatNo && 'VAT No: ' + lh.vatNo, lh.regNo && 'Reg No: ' + lh.regNo].filter(Boolean);
+  el.innerHTML = `<div class="bl"><div class="bn">${esc(name)}</div>
+    ${addr ? `<div class="ba">${esc(addr)}</div>` : ''}${contact ? `<div class="ba">${esc(contact)}</div>` : ''}
+    ${mono.length ? `<div class="bm">${mono.map(esc).join('<br>')}</div>` : ''}</div>
+    <div class="bdiv"></div>
+    <div class="br">${APP_LOGO}<div class="bt">S.A.W</div><div class="bs">WOODWORKS</div></div>`;
 }
 function renderNav() {
   const nav = document.querySelector('header nav'); if (!nav) return;
   if (CLOUD && (!ME || !ME.role)) { nav.innerHTML = ''; return; }
-  const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v ? 'style="background:#ffffff22"' : ''}>${l}</button>`;
+  const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v ? 'class="on"' : ''}>${l}</button>`;
   nav.innerHTML = b('projects', 'Projects') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
 }
 
@@ -563,6 +584,9 @@ function tplZone(t) { return /^\W*(wall|wand|muur)/i.test(t.name) ? 'upper' : (t
 function addLibMaterials(ids) { const used = new Set(ids);
   (LIBX ? LIBX.materials : []).forEach(m => { if (used.has(m.id) && !S.settings.materials.some(x => x.id === m.id)) S.settings.materials.push({ id:m.id, name:m.name, L:m.L, W:m.W, kerf:m.kerf, trim:m.trim, rotate:m.rotate, price:m.price ? sheetPrice(m.price, m) : 0 }); }); }
 
+/* Optimik prices are per m²; the app uses a price per full sheet. */
+function sheetPrice(perM2, m) { return Math.round((+perM2 || 0) * (+m.L || 0) / 1000 * (+m.W || 0) / 1000 * 100) / 100; }
+
 /* --- library pages --- */
 function libraryCard() {
   return `<div class="card noprint" style="border-left:4px solid var(--accent)"><b>📚 Optimik library — everything from the old program</b>
@@ -636,8 +660,7 @@ function viewLibItem() {
       ${partDrawings(parts.map(p => ({ ...p, grp:it.name })), 'grp')}
       <h2>Boards needed</h2>${boardsSummary(packs)}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`; }
   const parts = it.parts.map(libPartObj), packs = packAll(parts.map(p => ({ ...p, ref:p.set || 'Parts', role:'carcass' })), libMat);
-  return head + `<div class="msg warn small noprint">The old Optimik program only kept the parts list for each job — it never stored a room drawing or which cupboard each part came from. So below you get every part drawn to scale with its edging, plus the cutting layouts. To get room and cupboard drawings, copy it to your projects and add the cupboards to the walls (the Optimik cabinet templates can be dropped in).</div>
-    <h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}<h2>Cut list</h2>${partsTable(parts, 'set', 'Cabinet / set')}${itemsTable(it.items)}
+  return head + `<h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}<h2>Cut list</h2>${partsTable(parts, 'set', 'Cabinet / set')}${itemsTable(it.items)}
     ${partDrawings(parts, 'set')}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`;
 }
 function copyLibItem() {
@@ -756,42 +779,6 @@ function quoteTotals(p) {
   const markup = cost * (+(q.markup ?? S.settings.markup ?? 0)) / 100, sub = cost + markup, vat = (q.vat ?? true) ? sub * 0.15 : 0;
   return { lines, cost, markup, sub, vat, total:sub + vat };
 }
-function viewQuote() {
-  const p = P(); if (!p) return '';
-  p.quote = p.quote || { no:'Q' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(Math.random() * 90 + 10), date:new Date().toISOString().slice(0, 10), hours:0, extras:[], notes:S.settings.quoteTerms || DEF_TERMS_Q, vat:true };
-  const q = p.quote, T = quoteTotals(p), showMark = +(q.markup ?? S.settings.markup ?? 0);
-  const setQ = (k, isNum) => `onchange="P().quote['${k}']=${isNum ? 'num(this.value)??0' : 'this.value'};touch();render()"`;
-  const groups = {}; T.lines.forEach(l => (groups[l.group] = groups[l.group] || []).push(l));
-  const missing = T.lines.filter(l => !l.price && l.qty).length;
-  return `${asBanner()}<div class="noprint"><a href="#" onclick="go('project');return false">← ${esc(p.name)}</a></div>
-  <div class="card noprint"><div class="row">
-    <div><label>Quote no.</label><input value="${esc(q.no)}" ${setQ('no')}></div><div><label>Date</label><input type="date" value="${esc(q.date)}" ${setQ('date')}></div>
-    <div><label>Labour hours</label><input type="number" value="${q.hours || 0}" ${setQ('hours', 1)}></div>
-    <div><label>Rate / hour</label><input type="number" value="${q.rate ?? S.settings.labourRate ?? 0}" ${setQ('rate', 1)}></div>
-    <div><label>Markup %</label><input type="number" value="${showMark}" ${setQ('markup', 1)}></div>
-    <div><label>VAT 15%</label><select onchange="P().quote.vat=this.value==='1';touch();render()"><option value="1" ${q.vat !== false ? 'selected' : ''}>Add VAT</option><option value="0" ${q.vat === false ? 'selected' : ''}>No VAT</option></select></div>
-    <button class="primary" onclick="window.print()">🖨 Print / save PDF</button></div>
-    ${missing ? `<div class="msg warn small">${missing} line(s) have no price yet. Add prices under Settings → Prices (board, edging and hardware prices), or load them from the Optimik library.</div>` : ''}
-    <details style="margin-top:8px"><summary>Extra lines (delivery, worktops, appliances…)</summary>
-      ${(q.extras || []).map((e, i) => `<div class="row" style="margin-top:6px"><input value="${esc(e.desc)}" placeholder="Description" style="width:260px" onchange="P().quote.extras[${i}].desc=this.value;touch();render()">
-        <input type="number" value="${e.qty}" style="width:70px" onchange="P().quote.extras[${i}].qty=num(this.value)??0;touch();render()">
-        <input type="number" value="${e.price}" style="width:100px" onchange="P().quote.extras[${i}].price=num(this.value)??0;touch();render()">
-        <button class="small danger" onclick="P().quote.extras.splice(${i},1);touch();render()">✕</button></div>`).join('')}
-      <button class="small" style="margin-top:6px" onclick="P().quote.extras=(P().quote.extras||[]).concat([{desc:'Delivery',qty:1,price:0}]);touch();render()">+ Add line</button></details>
-    <label style="margin-top:8px">Notes / terms on the quote</label><textarea rows="3" style="width:100%" onchange="P().quote.notes=this.value;touch()">${esc(q.notes || '')}</textarea></div>
-  <div class="card" style="padding:0">${letterheadHTML(LH)}<div style="padding:14px">
-    <div class="row" style="align-items:flex-start"><div style="flex:1"><div style="font-size:24px;font-weight:800;letter-spacing:1px">QUOTATION</div>
-      <div class="small">Quote no. <b>${esc(q.no)}</b> · Date ${esc(q.date)}</div></div>
-      <div class="small" style="text-align:right"><b>To:</b> ${esc(p.client || '—')}<br>${esc(p.addr || '')}<br><b>Project:</b> ${esc(p.name)}</div></div>
-    <table style="margin-top:12px"><tr><th>Description</th><th style="text-align:right">Qty</th><th>Unit</th><th style="text-align:right">Price</th><th style="text-align:right">Amount</th></tr>
-      ${Object.entries(groups).map(([g, ls]) => `<tr><td colspan="5" style="background:#f6f1ea"><b>${esc(g)}</b></td></tr>` + ls.map(l => `<tr><td>${esc(l.desc)}</td><td style="text-align:right">${+l.qty.toFixed ? +(+l.qty).toFixed(2) : l.qty}</td><td>${esc(l.unit)}</td><td style="text-align:right">${money(l.price)}</td><td style="text-align:right">${money(l.qty * l.price)}</td></tr>`).join('')).join('')}
-      ${T.markup ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${money(T.cost)}</td></tr><tr><td colspan="4" style="text-align:right">Markup (${showMark}%)</td><td style="text-align:right">${money(T.markup)}</td></tr>` : ''}
-      <tr><td colspan="4" style="text-align:right"><b>Total excl. VAT</b></td><td style="text-align:right"><b>${money(T.sub)}</b></td></tr>
-      ${q.vat !== false ? `<tr><td colspan="4" style="text-align:right">VAT 15%</td><td style="text-align:right">${money(T.vat)}</td></tr>` : ''}
-      <tr><td colspan="4" style="text-align:right;font-size:17px"><b>TOTAL</b></td><td style="text-align:right;font-size:17px"><b>${money(T.total)}</b></td></tr></table>
-    ${q.notes ? `<p class="small" style="white-space:pre-wrap;margin-top:14px">${esc(q.notes)}</p>` : ''}</div></div>`;
-}
-const sheetPrice = (perM2, m) => Math.round(perM2 * m.L * m.W / 1e4) / 100;   // Optimik stores board prices per m²
 const DEF_TERMS_Q = 'Quote valid for 30 days.\nAll sizes to be confirmed on site before manufacture.';
 function loadLibPrices() {
   if (!LIBX) return toast('Open the Optimik library first so it can be read.');
@@ -808,6 +795,8 @@ function pricesCard() {
   return `<div class="card"><h3 style="margin-top:0">Prices &amp; quotes</h3>
     <div class="row"><div><label>Labour rate / hour</label>${inp('S.settings.labourRate', s.labourRate ?? 0)}</div><div><label>Default markup %</label>${inp('S.settings.markup', s.markup ?? 0)}</div>
       <div><label>Edging waste %</label>${inp('S.settings.edgeWaste', s.edgeWaste ?? 10)}</div>
+      <div><label>Tax rate % (0 if not VAT registered)</label>${inp('S.settings.taxRate', s.taxRate ?? 0)}</div>
+      <div><label>Next quote #</label>${inp('S.settings.nextQuoteNo', s.nextQuoteNo ?? 1)}</div><div><label>Next invoice #</label>${inp('S.settings.nextInvoiceNo', s.nextInvoiceNo ?? 1)}</div>
       <button onclick="openLibrary('prices').then(()=>{go('settings');loadLibPrices()})">Load prices from Optimik library</button></div>
     <h3>Board prices (per sheet)</h3><table>${s.materials.map((m, i) => `<tr><td>${esc(m.name)}</td><td>${inp(`S.settings.materials[${i}].price`, m.price || 0)}</td></tr>`).join('')}</table>
     <h3>Edge banding (price per metre)</h3><table><tr><th>Name</th><th>Price / m</th><th></th></tr>${s.edges.map((e, i) => `<tr><td>${inp(`S.settings.edges[${i}].name`, e.name, 220, 'text')}</td><td>${inp(`S.settings.edges[${i}].price`, e.price || 0)}</td><td><button class="small danger" onclick="S.settings.edges.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table>
@@ -815,6 +804,8 @@ function pricesCard() {
     <div class="row" style="margin-top:8px">${[['edgeCarcass','Edging on cupboard fronts'],['edgeDoors','Edging on doors & drawer fronts']].map(([k, l]) => `<div><label>${l}</label><select onchange="S.settings.roles['${k}']=this.value;save()"><option value="">None</option>${s.edges.map(e => `<option value="${e.id}" ${s.roles[k] === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select></div>`).join('')}</div>
     <h3>Hardware &amp; other items</h3><table><tr><th>Item</th><th>Unit</th><th>Price</th><th></th></tr>${s.hardware.map((h, i) => `<tr><td>${inp(`S.settings.hardware[${i}].name`, h.name, 220, 'text')}</td><td>${inp(`S.settings.hardware[${i}].unit`, h.unit, 70, 'text')}</td><td>${inp(`S.settings.hardware[${i}].price`, h.price || 0)}</td><td><button class="small danger" onclick="S.settings.hardware.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table>
     <button class="small" onclick="S.settings.hardware.push({name:'New item',unit:'each',price:0});save();render()">+ Add item</button>
+    <div class="row" style="margin-top:10px"><div style="flex:1"><label>Banking details (bottom of invoices &amp; quotations)</label>${inp('S.settings.banking', s.banking || '', 420, 'text')}</div>
+      <div><label>Closing line</label>${inp('S.settings.thanks', s.thanks ?? 'THANK YOU FOR YOUR BUSINESS!', 260, 'text')}</div></div>
     <label style="margin-top:10px">Default notes / terms on quotes</label><textarea rows="3" style="width:100%" onchange="S.settings.quoteTerms=this.value;save()">${esc(s.quoteTerms ?? DEF_TERMS_Q)}</textarea></div>`;
 }
 
@@ -850,7 +841,7 @@ function partSVG(p) {
   sides.forEach(([x1, y1, x2, y2, id]) => { if (ec(id)) g += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${ec(id)}" stroke-width="4"/>`; });
   const pm = libMat(p.matId);
   if (pm && pm.rotate === false) g += `<line x1="${w*0.2}" y1="${h/2}" x2="${w*0.8}" y2="${h/2}" stroke="#6b4a2e88" stroke-width="1.5" marker-end="url(#ar)"/>`;
-  return `<div style="border:1px solid var(--line);border-radius:8px;padding:6px;background:#fff;break-inside:avoid">
+  return `<div style="border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--card2);break-inside:avoid">
     <svg viewBox="-34 -14 ${w + 48} ${h + 22}" style="width:100%;height:110px"><defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#6b4a2e88"/></marker></defs>${g}
     <text x="${w/2}" y="-4" font-size="${fs}" text-anchor="middle" fill="#333">${L}</text><text x="-4" y="${h/2}" font-size="${fs}" text-anchor="end" dominant-baseline="middle" fill="#333">${W}</text></svg>
     <div class="small"><b>${esc(p.name || 'Part')}</b> × ${p.qty}</div><div class="small muted">${esc((libMat(p.matId) || {}).name || '')}</div>
@@ -860,6 +851,117 @@ function partDrawings(parts, groupKey) {
   const groups = {}; parts.forEach(p => (groups[p[groupKey] || 'Parts'] = groups[p[groupKey] || 'Parts'] || []).push(p));
   return `<h2>Part drawings</h2><p class="small muted">Every part drawn to scale. <span style="color:#c0392b">Red edges</span> are edge-banded; the arrow shows grain direction where the board may not be turned.</p>`
     + Object.entries(groups).map(([g, ps]) => `<h3>${esc(g)}</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">${ps.map(partSVG).join('')}</div>`).join('');
+}
+
+/* ============ Invoice & Quotation templates (S.A.W Woodworks layout, each user's own letterhead) ============ */
+const rand = v => 'R ' + (Math.round((+v || 0) * 100) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const pad7 = n => String(n).padStart(7, '0');
+const today = () => new Date().toISOString().slice(0, 10);
+function nextNo(kind) { const k = kind === 'invoice' ? 'nextInvoiceNo' : 'nextQuoteNo'; const n = +S.settings[k] || 1; S.settings[k] = n + 1; save(); return pad7(n); }
+function ensureQuote(p) {
+  if (!p.quote || !p.quote.v2) p.quote = Object.assign({ no:nextNo('quote'), date:today(), hours:0, extras:[], detail:'items' }, p.quote || {}, {
+    v2:true, customerId:'CASH', salesperson:S.settings.user || '', jobSite:p.addr || '', shipDate:'', shipVia:'', terms:'Valid for 30 days',
+    taxRate:S.settings.taxRate ?? 0, lines:[], notes:(p.quote && p.quote.notes) || S.settings.quoteTerms || DEF_TERMS_Q });
+  return p.quote;
+}
+function quoteDocLines(p) {
+  const q = p.quote, mk = 1 + (+(q.markup ?? S.settings.markup ?? 0)) / 100, out = [];
+  const roomTotal = r => quoteLines({ ...p, rooms:[r], quote:{ ...q, hours:0, extras:[] } }).reduce((a, l) => a + l.qty * l.price, 0);
+  if (q.detail === 'rooms') p.rooms.forEach(r => { const t = roomTotal(r); if (t) out.push({ qty:1, desc:r.name + ' — supply & manufacture as per drawings', price:t * mk }); });
+  else if (q.detail === 'total') { const t = p.rooms.reduce((a, r) => a + roomTotal(r), 0); if (t) out.push({ qty:1, desc:'Supply & manufacture of cupboards as per drawings (' + p.rooms.map(r => r.name).join(', ') + ')', price:t * mk }); }
+  else quoteLines({ ...p, quote:{ ...q, hours:0, extras:[] } }).forEach(l => { if (l.qty) out.push({ qty:+(+l.qty).toFixed(2), desc:l.desc, price:l.price * mk }); });
+  if (+q.hours) out.push({ qty:+q.hours, desc:'Labour — manufacture & installation (hours)', price:(+(q.rate ?? S.settings.labourRate ?? 0)) * mk });
+  (q.extras || []).forEach(e => out.push({ qty:+e.qty || 0, desc:e.desc, price:(+e.price || 0) * mk }));
+  (q.lines || []).forEach(l => out.push(l));
+  return out;
+}
+function newInvoice(p, fromQuote) {
+  p.invoices = p.invoices || [];
+  const inv = { id:uid(), no:nextNo('invoice'), date:today(), customerId:'CASH', salesperson:S.settings.user || '', jobSite:p.addr || '', shipDate:'', shipVia:'',
+    terms:'Due on receipt', taxRate:S.settings.taxRate ?? 0, lines:[], notes:'' };
+  if (fromQuote && p.quote) { ensureQuote(p); inv.lines = quoteDocLines(p).map(l => ({ qty:l.qty, desc:l.desc, price:Math.round(l.price * 100) / 100 })); inv.taxRate = p.quote.taxRate ?? inv.taxRate; }
+  else inv.lines = [{ qty:1, desc:'', price:0 }];
+  p.invoices.push(inv); touch(); return inv;
+}
+function docPaper(kind, d, p, lines) {
+  const lh = LH || {}, title = kind === 'invoice' ? 'Invoice' : 'Quotation', c = '#333';
+  const sub = lines.reduce((a, l) => a + (+l.qty || 0) * (+l.price || 0), 0), tax = sub * (+d.taxRate || 0) / 100, total = sub + tax;
+  const rows = lines.map(l => { const amt = (+l.qty || 0) * (+l.price || 0), red = amt < 0 ? ' style="color:#d0021b"' : '';
+    return `<tr${red}><td class="c">${l.qty === '' || l.qty == null ? '' : +l.qty}</td><td>${esc(l.desc)}</td><td class="r">${l.price ? (l.price < 0 ? '-' : '') + rand(Math.abs(l.price)) : ''}</td><td></td><td class="r">${amt ? (amt < 0 ? '-' : '') + rand(Math.abs(amt)) : ''}</td></tr>`; }).join('');
+  const blanks = Array.from({ length:Math.max(0, 16 - lines.length) }, () => '<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>').join('');
+  const addr = [lh.address, [lh.phone && 'Phone: ' + lh.phone, lh.email && 'Email: ' + lh.email].filter(Boolean).join('&nbsp;&nbsp;&nbsp; '), [lh.web, lh.regNo && 'Reg: ' + lh.regNo, lh.vatNo && 'VAT: ' + lh.vatNo].filter(Boolean).join(' · ')].filter(Boolean);
+  return `<div class="paper"><style>
+    .paper{background:#fff;color:#222;max-width:820px;margin:0 auto;padding:36px 44px;font:13px/1.35 Arial,Helvetica,sans-serif;box-shadow:0 1px 6px #0002}
+    .paper table{border-collapse:collapse;width:100%;display:table}.paper th{font-size:13px;color:#000;text-transform:uppercase;letter-spacing:0;text-align:center;border:1px solid #000;padding:3px 4px;font-weight:700}
+    .paper .dgrid td{border-left:1px solid #999;border-right:1px solid #999;border-bottom:1px solid #ccc;padding:2px 4px;font-size:13px}.paper .dbox{border:2px solid #000}
+    .paper .c{text-align:center}.paper .r{text-align:right;white-space:nowrap}.paper .tot td{padding:2px 6px;font-size:13px}
+    @media print{.paper{box-shadow:none;padding:0;max-width:none}@page{size:A4;margin:12mm}}</style>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>${lh.logo ? `<img src="${lh.logo}" style="max-height:80px;max-width:240px;object-fit:contain">` : ''}<div style="font-size:22px;font-weight:700;color:${c};margin-top:4px">${esc(lh.bizName || S.settings.user || '')}</div></div>
+      <div style="font-size:34px;color:#888;margin-top:40px">${title}</div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:16px">
+      <div>${addr.map(a => esc(a).replace(/\n/g, '<br>').replace(/&amp;nbsp;/g, '&nbsp;')).join('<br>')}</div>
+      <table style="width:auto"><tr><td class="r"><b>DATE</b></td><td>&nbsp;${esc(d.date ? d.date.split('-').reverse().join('/') : '')}</td></tr>
+        <tr><td class="r"><b>${kind === 'invoice' ? 'Invoice #' : 'Quote #'}</b></td><td>&nbsp;${esc(d.no)}</td></tr><tr><td class="r"><b>Customer ID</b></td><td>&nbsp;${esc(d.customerId || '')}</td></tr></table></div>
+    <div style="margin-top:18px"><b>${title} For:</b><br>${esc(p.client || '')}${p.addr ? '<br>' + esc(p.addr) : ''}</div>
+    <table class="dbox dgrid" style="margin-top:34px"><tr><th>Salesperson</th><th>Job Site</th><th>Ship date</th><th>Ship via</th><th></th><th>Terms</th></tr>
+      <tr><td class="c">${esc(d.salesperson || '')}</td><td class="c">${esc(d.jobSite || '')}</td><td class="c">${esc(d.shipDate || '')}</td><td class="c">${esc(d.shipVia || '')}</td><td></td><td class="c">${esc(d.terms || '')}</td></tr></table>
+    <table class="dbox dgrid" style="margin-top:14px"><tr><th style="width:15%">Quantity</th><th>Description</th><th style="width:13%">Unit price</th><th style="width:13%">Tax</th><th style="width:17%">Amount</th></tr>${rows}${blanks}</table>
+    <table class="tot" style="width:auto;margin-left:auto"><tr><td class="r"><b>SUBTOTAL</b></td><td class="r" style="border:1px solid #999;min-width:120px"><b>${rand(sub)}</b></td></tr>
+      <tr><td class="r">TAX RATE</td><td class="r" style="border:1px solid #999">${(+d.taxRate || 0).toFixed(2)}%</td></tr>
+      ${tax ? `<tr><td class="r">TAX</td><td class="r" style="border:1px solid #999">${rand(tax)}</td></tr>` : ''}
+      <tr><td class="r"><b>TOTAL</b></td><td class="r" style="border:1px solid #999"><b>${rand(total)}</b></td></tr></table>
+    ${d.notes ? `<p style="white-space:pre-wrap;margin-top:14px">${esc(d.notes)}</p>` : ''}
+    ${S.settings.banking ? `<p style="text-align:center;margin-top:26px">Banking Details: ${esc(S.settings.banking)}</p>` : ''}
+    <p style="text-align:center;font-weight:700;margin-top:${S.settings.banking ? 14 : 30}px">${esc(S.settings.thanks ?? 'THANK YOU FOR YOUR BUSINESS!')}</p></div>`;
+}
+function docHeaderFields(path, d, kind) {
+  const f = (k, l, w = 140, t = 'text') => `<div><label>${l}</label><input type="${t}" style="width:${w}px" value="${esc(d[k] ?? '')}" onchange="${path}['${k}']=${t === 'number' ? 'num(this.value)??0' : 'this.value'};touch();render()"></div>`;
+  return `<div class="row">${f('no', kind === 'invoice' ? 'Invoice #' : 'Quote #', 110)}${f('date', 'Date', 150, 'date')}${f('customerId', 'Customer ID', 110)}${f('salesperson', 'Salesperson')}${f('jobSite', 'Job site')}${f('shipDate', 'Ship date', 110)}${f('shipVia', 'Ship via', 110)}${f('terms', 'Terms', 150)}${f('taxRate', 'Tax rate %', 80, 'number')}</div>`;
+}
+function linesEditor(path, lines) {
+  return `<table style="margin-top:8px"><tr><th>Qty</th><th>Description</th><th>Unit price</th><th></th></tr>${lines.map((l, i) => `<tr>
+    <td><input type="number" style="width:70px" value="${l.qty ?? ''}" onchange="${path}[${i}].qty=num(this.value)??0;touch();render()"></td>
+    <td><input style="width:100%;min-width:260px" value="${esc(l.desc)}" onchange="${path}[${i}].desc=this.value;touch();render()"></td>
+    <td><input type="number" style="width:110px" value="${l.price ?? 0}" onchange="${path}[${i}].price=num(this.value)??0;touch();render()"></td>
+    <td><button class="small danger" onclick="${path}.splice(${i},1);touch();render()">✕</button></td></tr>`).join('')}</table>
+    <div class="row" style="margin-top:6px"><button class="small" onclick="${path}.push({qty:1,desc:'',price:0});touch();render()">+ Add line</button>
+    <button class="small" onclick="${path}.push({qty:1,desc:'Already received payment of',price:-0});touch();render()">+ Payment received (enter as minus)</button></div>`;
+}
+function viewQuote() {
+  const p = P(); if (!p) return ''; const q = ensureQuote(p), lines = quoteDocLines(p);
+  const missing = quoteLines(p).filter(l => !l.price && l.qty).length;
+  return `${asBanner()}<div class="noprint"><a href="#" onclick="go('project');return false">← ${esc(p.name)}</a></div>
+  <div class="card noprint"><h3 style="margin-top:0">Quotation</h3>${docHeaderFields('P().quote', q, 'quote')}
+    <div class="row" style="margin-top:8px"><div><label>Show on quote</label><select onchange="P().quote.detail=this.value;touch();render()">${[['items','Itemised (boards, edging, hardware)'],['rooms','One line per room'],['total','One total line']].map(([k, l]) => `<option value="${k}" ${q.detail === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div><label>Labour hours</label><input type="number" style="width:80px" value="${q.hours || 0}" onchange="P().quote.hours=num(this.value)??0;touch();render()"></div>
+      <div><label>Rate / hour</label><input type="number" style="width:90px" value="${q.rate ?? S.settings.labourRate ?? 0}" onchange="P().quote.rate=num(this.value)??0;touch();render()"></div>
+      <div><label>Markup % (built into prices)</label><input type="number" style="width:80px" value="${q.markup ?? S.settings.markup ?? 0}" onchange="P().quote.markup=num(this.value)??0;touch();render()"></div>
+      <button class="primary" onclick="window.print()">🖨 Print / save PDF</button><button onclick="const i=newInvoice(P(),true);go('invoice',{inv:i.id})">🧾 Turn into invoice</button></div>
+    ${missing ? `<div class="msg warn small">${missing} item(s) have no price yet — add prices under Settings → Prices &amp; quotes.</div>` : ''}
+    <details style="margin-top:8px"><summary>Extra lines (delivery, installation, worktops…)</summary>${linesEditor('P().quote.lines', q.lines || [])}</details>
+    <label style="margin-top:8px">Notes on the quotation</label><textarea rows="2" style="width:100%" onchange="P().quote.notes=this.value;touch();render()">${esc(q.notes || '')}</textarea></div>
+  ${docPaper('quote', q, p, lines)}`;
+}
+function viewInvoice() {
+  const p = P(); if (!p) return ''; const inv = (p.invoices || []).find(x => x.id === V.inv); if (!inv) return '<p>Invoice not found.</p>';
+  const i = p.invoices.indexOf(inv), path = `P().invoices[${i}]`;
+  return `${asBanner()}<div class="noprint"><a href="#" onclick="go('project');return false">← ${esc(p.name)}</a></div>
+  <div class="card noprint"><h3 style="margin-top:0">Invoice</h3>${docHeaderFields(path, inv, 'invoice')}
+    ${linesEditor(path + '.lines', inv.lines)}
+    <label style="margin-top:8px">Notes on the invoice</label><textarea rows="2" style="width:100%" onchange="${path}.notes=this.value;touch();render()">${esc(inv.notes || '')}</textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" onclick="window.print()">🖨 Print / save PDF</button>
+      <button class="danger" onclick="if(confirm('Delete this invoice?')){P().invoices.splice(${i},1);touch();go('project')}">Delete invoice</button></div></div>
+  ${docPaper('invoice', inv, p, inv.lines)}`;
+}
+function docsCard(p) {
+  const invs = p.invoices || [];
+  return `<div class="card noprint"><b>Quotation &amp; invoices</b><div class="row" style="margin-top:8px">
+    <button class="primary" onclick="go('quote')">💰 Quotation${p.quote && p.quote.no ? ' #' + esc(p.quote.no) : ''}</button>
+    <button onclick="const i=newInvoice(P(),false);go('invoice',{inv:i.id})">🧾 New invoice</button>
+    ${p.quote ? `<button onclick="const i=newInvoice(P(),true);go('invoice',{inv:i.id})">🧾 Invoice from quotation</button>` : ''}</div>
+    ${invs.length ? `<table style="margin-top:8px"><tr><th>Invoice #</th><th>Date</th><th>Total</th></tr>${invs.map(v => { const t = v.lines.reduce((a, l) => a + (+l.qty || 0) * (+l.price || 0), 0) * (1 + (+v.taxRate || 0) / 100);
+      return `<tr style="cursor:pointer" onclick="go('invoice',{inv:'${v.id}'})"><td><b>${esc(v.no)}</b></td><td>${esc(v.date)}</td><td>${rand(t)}</td></tr>`; }).join('')}</table>` : ''}</div>`;
 }
 
 function mergeSettings(s) {
@@ -1110,7 +1212,8 @@ function sheetSVG(res, b, idx) {
     const w = n.w - k, h = n.h - k, x = n.x + t, y = n.y + t;
     const [pl, pw] = n.r ? [n.p.W, n.p.L] : [n.p.L, n.p.W];
     g += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--new)" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
-    if (w > fs*3 && h > fs*1.4) g += `<text x="${x+w/2}" y="${y+h/2}" font-size="${Math.min(fs, h/2.5)}" text-anchor="middle" dominant-baseline="middle">${esc(n.p.ref)} ${esc(n.p.name)} ${pl}×${pw}</text>`;
+    { const lbl = [`${n.p.ref || ''} ${n.p.name || ''} ${pl}×${pw}`.trim(), `${n.p.name || ''} ${pl}×${pw}`.trim(), `${pl}×${pw}`];
+      for (const t of lbl) { const f = Math.min(fs, h / 2.5, (w * 0.92) / (t.length * 0.58)); if (f >= fs * 0.45) { g += `<text x="${x+w/2}" y="${y+h/2}" font-size="${f}" text-anchor="middle" dominant-baseline="middle">${esc(t)}</text>`; break; } } }
   });
   return `<svg viewBox="-20 -20 ${m.L+40} ${m.W+40}" style="width:100%;max-height:340px">${g}</svg>`;
 }
@@ -1119,8 +1222,8 @@ function sheetSVG(res, b, idx) {
 function modal(html) { $('#modal').innerHTML = html ? `<div class="back"><div class="box">${html}</div></div>` : ''; }
 
 const TERMS_HTML = () => `
-<h3>Saw Wood Works — Terms &amp; Conditions</h3>
-<p><b>1. Ownership.</b> Saw Wood Works ("the app") was created by and belongs to Sean Warren. All rights are reserved. You may use the app under these terms; you may not copy, sell or redistribute it without Sean Warren's written permission.</p>
+<h3>S.A.W Woodworks — Terms &amp; Conditions</h3>
+<p><b>1. Ownership.</b> S.A.W Woodworks ("the app") was created by and belongs to Sean Warren. All rights are reserved. You may use the app under these terms; you may not copy, sell or redistribute it without Sean Warren's written permission.</p>
 <p><b>2. Licence.</b> Use of the app is a personal, non-transferable licence that the owner may withdraw on 30 days' notice.</p>
 <p><b>3. Measurements and board quantities are estimates.</b> Room sizes, cupboard sizes, cutting lists and board counts are calculated from the information you enter and the build rules in Settings. Always check measurements on site and check the cutting list before cutting any material. The owner is not responsible for wasted material, incorrect cuts, or incorrect quotes.</p>
 <p><b>4. AI photo reading.</b> If you use "Read photos with AI", your room photos are sent to the AI service you choose in Settings, using your own key: Google Gemini (free tier — Google may use what you send on the free tier to improve its products, so don't photograph anything private) or Anthropic Claude (paid on your own account). AI results are guesses — every size it suggests is marked yellow and must be checked by you.</p>
@@ -1130,7 +1233,7 @@ const TERMS_HTML = () => `
 function termsGate() {
   const s = S.settings;
   if (s.agreed && s.agreed.v === TERMS_VERSION) return false;
-  modal(`<h2 style="margin-top:0">Welcome to Saw Wood Works</h2><p class="muted">Please read and accept the terms to start.</p>
+  modal(`<h2 style="margin-top:0">Welcome to S.A.W Woodworks</h2><p class="muted">Please read and accept the terms to start.</p>
     <div class="terms">${TERMS_HTML()}</div>
     <div style="margin-top:12px"><label>Your name</label><input id="tName" value="${esc(s.user)}" placeholder="e.g. Sean Warren" style="width:100%"></div>
     <label style="margin-top:10px;color:var(--ink);font-size:14px"><input type="checkbox" id="tOk"> I have read and accept the Terms &amp; Conditions</label>
@@ -1150,7 +1253,7 @@ function acceptTerms() {
 /* ============ views ============ */
 function render() {
   const a = $('#app');
-  renderNav();
+  renderNav(); renderHeader();
   if (V.view === 'login') { a.innerHTML = viewLogin(); return; }
   if (V.view === 'bootstrap') { a.innerHTML = viewBootstrap(); return; }
   if (V.view === 'noaccess' || V.view === 'blocked') { a.innerHTML = viewNoAccess(V.view === 'blocked'); return; }
@@ -1159,6 +1262,7 @@ function render() {
   if (V.view === 'library') { a.innerHTML = viewLibrary(); return; }
   if (V.view === 'libitem') { a.innerHTML = viewLibItem(); return; }
   if (V.view === 'quote' && P()) { a.innerHTML = viewQuote(); return; }
+  if (V.view === 'invoice' && P()) { a.innerHTML = viewInvoice(); return; }
   if (V.view === 'letterhead') { a.innerHTML = viewLetterhead(); renderNav(); return; }
   if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
   if (V.view === 'settings') a.innerHTML = viewSettings();
@@ -1211,7 +1315,7 @@ function viewProject() {
     <button class="danger small" onclick="delRoom('${r.id}')">Delete</button></div></div>`).join('') || '<p class="muted">No rooms yet.</p>'}</div>
   ${p.note ? `<p class="small muted">${esc(p.note)}</p>` : ''}
   ${p.optimikSheets ? `<h2>Saved Optimik cutting layout</h2>${p.optimikSheets.map((s, i) => `<div class="card"><b>Sheet ${i+1} of ${p.optimikSheets.length}</b> <span class="muted small">(${s.L} × ${s.W}, ${s.usage}% used)</span>${savedSheetSVG(s)}</div>`).join('')}` : ''}
-  <div class="row noprint" style="margin:10px 0"><button class="primary" onclick="go('quote')">💰 Quote for this project</button></div>
+  ${docsCard(p)}
   ${parts.length ? `<h2>Boards for the whole project</h2>${boardsSummary(packs)}${edgeTable(parts)}
     <div class="noprint"><button onclick="window.print()">🖨 Print</button></div>` : ''}`;
 }
@@ -1529,15 +1633,15 @@ async function testKey() {
   catch (e) { el.innerHTML = `<div class="msg bad">${esc(e.message)}</div>`; }
 }
 function exportData() {
-  const blob = new Blob([JSON.stringify({ app:'Saw Wood Works', v:1, at:new Date().toISOString(), data: { ...S, settings: { ...S.settings, apiKey:'', geminiKey:'' } } })], { type:'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'saw-wood-works-backup-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
+  const blob = new Blob([JSON.stringify({ app:'S.A.W Woodworks', v:1, at:new Date().toISOString(), data: { ...S, settings: { ...S.settings, apiKey:'', geminiKey:'' } } })], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'saw-woodworks-backup-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
 }
 function importData(f) {
   if (!f) return; const fr = new FileReader();
   fr.onload = () => { try { const j = JSON.parse(fr.result); if (!j.data || !Array.isArray(j.data.projects)) throw 0;
       if (!confirm(`Replace everything on this device with the backup from ${(j.at||'').slice(0,10)} (${j.data.projects.length} projects)?`)) return;
       const key = S.settings.apiKey, gk = S.settings.geminiKey; S = { settings: mergeSettings(j.data.settings), projects: j.data.projects }; S.settings.apiKey = key; S.settings.geminiKey = gk; save(); go('projects');
-    } catch (e) { alert('That file is not a Saw Wood Works backup.'); } };
+    } catch (e) { alert('That file is not an S.A.W Woodworks backup.'); } };
   fr.readAsText(f);
 }
 
