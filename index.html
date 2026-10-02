@@ -117,7 +117,9 @@ const DEF_SETTINGS = {
   user: '', agreed: null, provider: 'gemini', geminiKey: '', apiKey: '', model: '',
   rules: { t:16, back:3, baseH:720, baseD:560, kick:100, worktop:32, wallH:720, wallD:320, wallElev:1450,
            tallH:2100, tallD:560, railW:100, shelfSet:20, gap:3, slide:26, drawerClear:60 },
-  roles: { carcass:'m1', doors:'m1', backs:'m2' },
+  roles: { carcass:'m1', doors:'m1', backs:'m2', edgeCarcass:'e1', edgeDoors:'e2' },
+  edges: [ { id:'e1', name:'Edging 1mm (cupboard fronts)', price:0 }, { id:'e2', name:'Edging 2mm (doors & fronts)', price:0 } ],
+  hardware: [], labourRate: 0, markup: 0, edgeWaste: 10,
   materials: [
     { id:'m1', name:'White Melamine 16mm', L:2750, W:1830, kerf:4, trim:10, rotate:true },
     { id:'m2', name:'Hardboard 3mm (backs & drawer bottoms)', L:2440, W:1220, kerf:4, trim:5, rotate:true }
@@ -130,7 +132,9 @@ const TYPES = {
   drawer:   { label:'Drawer unit',    zone:'floor', w:500, doors:0, shelves:0, drawers:3 },
   wall:     { label:'Wall unit',      zone:'upper', w:600, doors:1, shelves:1, drawers:0 },
   tall:     { label:'Tall / pantry',  zone:'both',  w:600, doors:2, shelves:4, drawers:0 },
-  wardrobe: { label:'Wardrobe (BIC)', zone:'both',  w:900, doors:2, shelves:1, drawers:0 }
+  wardrobe: { label:'Wardrobe (BIC)', zone:'both',  w:900, doors:2, shelves:1, drawers:0 },
+  cornerBase: { label:'Blind corner base', zone:'floor', w:1000, doors:1, shelves:1, drawers:0, blind:450 },
+  cornerWall: { label:'Blind corner wall', zone:'upper', w:900, doors:1, shelves:1, drawers:0, blind:330 }
 };
 const STATUS = { new:'New', keep:'Keep existing', replace:'Replace existing', ask:'Existing – decide' };
 const SHAPES = { straight:['One wall',1], L:['L-shape',2], U:['U-shape',3], rect:['Full room (4 walls)',4] };
@@ -372,7 +376,8 @@ function viewUsers() {
         <button class="small ${u.active === false ? '' : 'danger'}" onclick="setUser('${u.uid}',{active:${u.active === false}})">${u.active === false ? 'Unblock' : 'Block'}</button>
         <button class="small" onclick="addExamples('${u.uid}')">+ Example job</button>` : ''}
       </td></tr>`).join('')}</table></div>
-    <p class="small muted">"Reset password" emails the user a link to choose a new password. "Block" stops them logging in straight away.</p></div>`;
+    <p class="small muted">"Reset password" emails the user a link to choose a new password. "Block" stops them logging in straight away.</p></div>
+  ${libraryUploadCard()}`;
 }
 let CREATOR = null;
 async function createUser() {
@@ -522,11 +527,297 @@ async function uploadLocal() {
   cloudFlush(); LOCAL.projects = []; DB.set('state', LOCAL); toast(`Uploaded ${n} project(s).`); render();
 }
 
+/* ============ Optimik library: every job, cutting plan, cabinet template and price list from the old program ============ */
+let LIBX = null, LIBC = {}, LIBQ = '', LIBBUSY = false;
+const libMat = id => (LIBX && LIBX.materials.find(m => m.id === id)) || mat(id);
+function libPartObj(s) { const [name, L, W, qty, matId, set, edges, rot] = s.split('|'); return { name, L:+L, W:+W, qty:+qty || 1, matId, set, edges, rot:rot === '1' }; }
+function edgeText(e) {
+  if (!e) return ''; const lab = ['L1','L2','W1','W2'];
+  return e.split(',').map((v, i) => v && v !== '0' ? `${lab[i]}: ${edgeName(v)}` : '').filter(Boolean).join(', ');
+}
+async function libLoadIndex(force) {
+  if (LIBX && !force) return LIBX;
+  if (!CLOUD) { const x = await DB.get('library'); LIBX = x ? x.index : null; LIBC = x ? x.items : {}; return LIBX; }
+  const s = await FB.F.getDoc(FB.F.doc(FB.db, 'library/index'));
+  LIBX = s.exists() ? JSON.parse(s.data().data) : null; return LIBX;
+}
+async function libChunk(n) { if (!CLOUD || LIBC['_c' + n]) return; const s = await FB.F.getDoc(FB.F.doc(FB.db, 'library/c' + n)); if (s.exists()) Object.assign(LIBC, JSON.parse(s.data().data)); LIBC['_c' + n] = 1; }
+const libEntry = id => LIBX && [...LIBX.jobs, ...LIBX.plans, ...(LIBX.templates || [])].find(x => x.id === id);
+async function libItem(id) { if (LIBC[id]) return LIBC[id]; const e = libEntry(id); if (!e) return null; await libChunk(e.chunk); return LIBC[id] || null; }
+async function libImages() { if (!LIBX || !LIBX.imgChunks) return; for (const n of LIBX.imgChunks) await libChunk(n); render(); }
+const libImg = name => name && LIBC['img:' + name];
+
+/* --- cabinet template formulas (Optimik): dim 1=width 2=height 3=depth; op 1 = minus, 10 = plus, 2..9 = divide by N, 11+ = times (N-9); values in 1/100 mm --- */
+function tplEval(f, X, Y, Z, def) {
+  if (!f) return def;
+  const t = f.split(' ').map(Number); let v = { 0:0, 1:X, 2:Y, 3:Z }[t[0]]; if (v === undefined) return def;
+  for (let i = 1; i + 1 < t.length; i += 2) { const o = t[i], a = t[i + 1] / 100;
+    if (!o) continue; if (o === 1) v -= a; else if (o === 10) v += a; else if (o >= 2 && o <= 9) v = a ? v / a : v / o; else if (o >= 11) v *= (o - 9); }
+  return r0(v);
+}
+function tplParts(tpl, W, H, D) {
+  return tpl.parts.map(s => { const [name, cs, cv, sd, vd, qty, matId, edges, rot] = s.split('|');
+    return { name, L:tplEval(cs, W, H, D, +sd), W:tplEval(cv, W, H, D, +vd), qty:+qty || 1, matId, edges, rot:rot === '1' }; }).filter(p => p.L > 0 && p.W > 0);
+}
+function tplZone(t) { return /^\W*(wall|wand|muur)/i.test(t.name) ? 'upper' : (t.Y >= 1500 ? 'both' : 'floor'); }
+function addLibMaterials(ids) { const used = new Set(ids);
+  (LIBX ? LIBX.materials : []).forEach(m => { if (used.has(m.id) && !S.settings.materials.some(x => x.id === m.id)) S.settings.materials.push({ id:m.id, name:m.name, L:m.L, W:m.W, kerf:m.kerf, trim:m.trim, rotate:m.rotate, price:m.price ? sheetPrice(m.price, m) : 0 }); }); }
+
+/* --- library pages --- */
+function libraryCard() {
+  return `<div class="card noprint" style="border-left:4px solid var(--accent)"><b>📚 Optimik library — everything from the old program</b>
+    <p class="small muted" style="margin:4px 0 8px">All old jobs, saved cutting plans, cabinet templates and price lists. Open any of them to see the cut list and layouts, then copy it into your own projects.</p>
+    <button class="primary" onclick="openLibrary()">Open the library</button></div>`;
+}
+async function openLibrary(tab) { if (tab) V.libTab = tab; go('library'); if (!LIBX) { LIBBUSY = true; render(); try { await libLoadIndex(); } catch (e) { toast('Could not load the library: ' + (e.code || e.message)); } LIBBUSY = false; render(); } }
+function viewLibrary() {
+  if (LIBBUSY) return `<h1>Optimik library</h1><p><span class="spinner"></span> Loading…</p>`;
+  if (!LIBX) return `<h1>Optimik library</h1><div class="msg warn">The library hasn't been loaded yet.${isRoot() || !CLOUD ? ' Upload <b>optimik-library.json</b> on the ' + (CLOUD ? 'Users' : 'Settings') + ' page.' : ' Ask the administrator to upload it.'}</div>`;
+  const tab = V.libTab || 'jobs', q = LIBQ.toLowerCase(), f = x => !q || x.name.toLowerCase().includes(q);
+  const tabs = [['jobs', `Jobs (${LIBX.jobs.length})`], ['plans', `Cutting plans (${LIBX.plans.length})`], ['tpl', `Cabinet templates (${(LIBX.templates || []).length})`], ['prices', 'Price lists']];
+  const search = `<input placeholder="Search…" style="width:100%" value="${esc(LIBQ)}" oninput="LIBQ=this.value;clearTimeout(window._lq);window._lq=setTimeout(()=>{render();const i=document.querySelector('#libSearch input');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)">`;
+  let body = '';
+  if (tab === 'jobs') { const jobs = LIBX.jobs.filter(f).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    body = `<div class="card"><div class="tablewrap"><table><tr><th>Job</th><th>Date</th><th>Part lines</th></tr>${jobs.slice(0, 400).map(x => `<tr style="cursor:pointer" onclick="openLibItem('${x.id}')"><td><b>${esc(x.name)}</b></td><td class="small">${esc(x.date)}</td><td class="small">${x.np}</td></tr>`).join('') || '<tr><td class="muted">No matches.</td></tr>'}</table></div>
+      ${jobs.length > 400 ? `<p class="small muted">Showing the newest 400 of ${jobs.length}. Search to find older jobs.</p>` : ''}</div>`; }
+  if (tab === 'plans') body = `<div class="card"><div class="tablewrap"><table><tr><th>Cutting plan</th><th>Sheets</th><th>Parts</th></tr>${LIBX.plans.filter(f).map(x => `<tr style="cursor:pointer" onclick="openLibItem('${x.id}')"><td><b>${esc(x.name)}</b></td><td>${x.ns}</td><td>${x.np}</td></tr>`).join('')}</table></div></div>`;
+  if (tab === 'tpl') { const G = LIBX.groups || {}, gname = g => (G[g] ? (G[G[g].parent] && G[g].parent !== '1' ? G[G[g].parent].name + ' › ' : '') + G[g].name : 'Other');
+    const by = {}; (LIBX.templates || []).filter(f).forEach(t => (by[gname(t.group)] = by[gname(t.group)] || []).push(t));
+    body = Object.keys(by).sort().map(g => `<h3>${esc(g)} (${by[g].length})</h3><div class="card"><div class="tablewrap"><table><tr><th>Cabinet</th><th>W × H × D</th><th>Parts</th></tr>${by[g].slice(0, 300).map(t => `<tr style="cursor:pointer" onclick="openLibItem('${t.id}')"><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td><td class="small">${t.np}</td></tr>`).join('')}</table></div></div>`).join('') || '<p class="muted">No matches.</p>'; }
+  if (tab === 'prices') { if (LIBX.imgChunks && !LIBC['_c' + LIBX.imgChunks[0]]) setTimeout(libImages, 0);
+    body = `<h3>Board materials</h3><div class="card"><div class="tablewrap"><table><tr><th></th><th>Material</th><th>Code</th><th>Sheet</th><th>Kerf</th><th>Grain</th><th>Price / m²</th><th>≈ per sheet</th></tr>${LIBX.materials.filter(f).map(m => `<tr><td>${libImg(m.img) ? `<img src="${libImg(m.img)}" style="width:36px;height:24px;object-fit:cover;border-radius:3px">` : ''}</td><td><b>${esc(m.name)}</b></td><td>${esc(m.code)}</td><td>${m.L} × ${m.W}</td><td>${m.kerf}</td><td>${m.rotate ? '' : 'yes'}</td><td>R ${(+m.price).toFixed(2)}</td><td>R ${sheetPrice(+m.price, m).toFixed(2)}</td></tr>`).join('')}</table></div></div>
+    <h3>Edge banding</h3><div class="card"><div class="tablewrap"><table><tr><th>Code</th><th>Name</th><th>Price / m</th></tr>${(LIBX.edgeList || []).filter(f).map(e => `<tr><td>${esc(e.code)}</td><td>${esc(e.name)}</td><td>R ${(+e.price).toFixed(2)}</td></tr>`).join('')}</table></div></div>
+    <h3>Hardware &amp; labour</h3><div class="card"><table><tr><th>Code</th><th>Item</th><th>Unit</th><th>Price</th></tr>${(LIBX.hardware || []).filter(f).map(h => `<tr><td>${esc(h.code)}</td><td>${esc(h.name)}</td><td>${esc(h.unit)}</td><td>R ${(+h.price).toFixed(2)}</td></tr>`).join('')}</table></div>
+    ${(LIBX.stock || []).length ? `<h3>Board stock movements</h3><div class="card"><table><tr><th>Date</th><th>Note</th><th>In / out</th><th>Sheets</th></tr>${LIBX.stock.map(s => `<tr><td>${esc(s.date)}</td><td>${esc(s.text)}</td><td>${s.kind}</td><td>${s.qty}</td></tr>`).join('')}</table></div>` : ''}`; }
+  return `<div class="noprint"><a href="#" onclick="go('projects');return false">← Projects</a></div><h1>Optimik library</h1>
+  <div class="tabs noprint">${tabs.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" onclick="V.libTab='${k}';render()">${l}</button>`).join('')}</div>
+  <div class="card noprint" id="libSearch">${search}</div>${body}`;
+}
+async function openLibItem(id) { V.lib = id; V.libItem = null; const e = libEntry(id); if (e && e.X) V.tplDim = { W:e.X, H:e.Y, D:e.Z }; go('libitem');
+  try { V.libItem = await libItem(id); } catch (e) { toast('Could not open: ' + (e.code || e.message)); } render(); if (V.libItem && V.libItem.img) libImages(); }
+function savedSheetSVG(sh) {
+  const fs = Math.max(sh.L, sh.W) / 55;
+  let g = `<rect x="0" y="0" width="${sh.L}" height="${sh.W}" fill="#f1ece4" stroke="#3b2a1d" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  sh.parts.forEach(s => { const [x, y, L, W, rot, lab] = s.split('|'); const w = rot === '1' ? +W : +L, h = rot === '1' ? +L : +W;
+    g += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--new)" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    if (w > fs * 3 && h > fs * 1.4) g += `<text x="${+x + w/2}" y="${+y + h/2}" font-size="${Math.min(fs, h/2.5)}" text-anchor="middle" dominant-baseline="middle">${esc(lab)} ${L}×${W}</text>`; });
+  return `<svg viewBox="-20 -20 ${sh.L + 40} ${sh.W + 40}" style="width:100%;max-height:340px">${g}</svg>`;
+}
+function planParts(it) {
+  const m = {}; it.sheets.forEach(sh => sh.parts.forEach(s => { const [, , L, W, , lab] = s.split('|'); const k = lab + '|' + L + '|' + W; m[k] = (m[k] || 0) + 1; }));
+  const mid = (LIBX.materials.find(x => it.material && x.name.toLowerCase().startsWith(it.material.toLowerCase().slice(0, 10))) || LIBX.materials[0] || {}).id;
+  return Object.entries(m).map(([k, q]) => { const [name, L, W] = k.split('|'); return { name:name || 'Part', L:+L, W:+W, qty:q, matId:mid, set:name, edges:'' }; });
+}
+function partsTable(parts, groupKey, groupLabel) {
+  const groups = {}; parts.forEach(p => (groups[p[groupKey] || '—'] = groups[p[groupKey] || '—'] || []).push(p));
+  return `<div class="card"><div class="tablewrap"><table><tr><th>${groupLabel}</th><th>Part</th><th>Length</th><th>Width</th><th>Qty</th><th>Material</th><th>Edging</th></tr>
+    ${Object.entries(groups).map(([g, ps]) => ps.map((p, i) => `<tr><td>${i === 0 ? `<b>${esc(g)}</b>` : ''}</td><td>${esc(p.name)}</td><td>${p.L}</td><td>${p.W}</td><td>${p.qty}</td><td class="small">${esc((libMat(p.matId) || {}).name || '?')}</td><td class="small">${esc(edgeText(p.edges))}</td></tr>`).join('')).join('')}</table></div></div>`;
+}
+const itemsTable = items => items && items.length ? `<h2>Hardware &amp; other items</h2><div class="card"><table><tr><th>Item</th><th>Qty</th></tr>${items.map(s => { const [n, q] = s.split('|'); return `<tr><td>${esc(n)}</td><td>${esc(q)}</td></tr>`; }).join('')}</table></div>` : '';
+const layoutsHTML = packs => packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i + 1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('');
+function viewLibItem() {
+  const ent = libEntry(V.lib); if (!ent) return '<p>Not found.</p>';
+  const it = V.libItem, isTpl = !!ent.X || ent.X === 0;
+  const head = `<div class="noprint"><a href="#" onclick="go('library');return false">← Optimik library</a></div>${letterheadHTML(LH)}
+    <div class="row" style="align-items:center"><h1 style="margin-right:auto">${esc(ent.name)}</h1>
+    ${isTpl ? '' : `<button class="primary noprint" ${it ? '' : 'disabled'} onclick="copyLibItem()">⧉ Copy to my projects</button>`}<button class="noprint" onclick="window.print()">🖨 Print</button></div>
+    <p class="muted small">${isTpl ? 'Optimik cabinet template' : ent.date ? 'Optimik job dated ' + esc(ent.date) : 'Saved Optimik cutting plan'}${it && it.note ? ' · ' + esc(it.note) : ''}${it && it.material ? ' · Material: ' + esc(it.material) : ''}</p>`;
+  if (!it) return head + '<p><span class="spinner"></span> Loading…</p>';
+  if (it.sheets) { const tot = it.sheets.length, use = tot ? it.sheets.reduce((a, s) => a + s.usage, 0) / tot : 0;
+    return head + `<div class="card"><span class="big" style="font-size:22px">${tot}</span> sheet(s) · average usage ${r0(use)}%</div><h2>Cutting layouts (exactly as saved in Optimik)</h2>`
+      + it.sheets.map((s, i) => `<div class="card"><b>Sheet ${i + 1} of ${tot}</b> <span class="muted small">(${s.L} × ${s.W}${s.code ? ', ' + esc(s.code) : ''}, ${s.usage}% used)</span>${savedSheetSVG(s)}</div>`).join(''); }
+  if (isTpl) { const d = V.tplDim || { W:it.X, H:it.Y, D:it.Z }, parts = tplParts(it, d.W, d.H, d.D);
+    const packs = packAll(parts.map(p => ({ ...p, ref:it.name, role:'tpl' })), libMat);
+    return head + `<div class="card noprint"><div class="row">${libImg(it.img) ? `<img src="${libImg(it.img)}" style="height:70px;border-radius:6px">` : ''}
+      ${[['W','Width'],['H','Height'],['D','Depth']].map(([k, l]) => `<div><label>${l}</label><input type="number" value="${d[k]}" onchange="V.tplDim=Object.assign({},V.tplDim||{W:${it.X},H:${it.Y},D:${it.Z}},{${k}:num(this.value)||0});render()"></div>`).join('')}
+      <span class="small muted">Change the size and every part recalculates, like in Optimik. To use it, open a room → Cupboards → "+ Optimik cabinet".</span></div></div>
+      <h2>Parts at ${d.W} × ${d.H} × ${d.D}</h2>${partsTable(parts.map(p => ({ ...p, grp:it.name })), 'grp', 'Cabinet')}${edgeTable(parts)}${itemsTable(it.items)}
+      <h2>Boards needed</h2>${boardsSummary(packs)}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`; }
+  const parts = it.parts.map(libPartObj), packs = packAll(parts.map(p => ({ ...p, ref:p.set || 'Parts', role:'carcass' })), libMat);
+  return head + `<h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}<h2>Cut list</h2>${partsTable(parts, 'set', 'Cabinet / set')}${itemsTable(it.items)}<h2>Cutting layouts</h2>${layoutsHTML(packs)}`;
+}
+function copyLibItem() {
+  const ent = libEntry(V.lib), it = V.libItem; if (!it) return;
+  const parts = it.sheets ? planParts(it) : it.parts.map(libPartObj);
+  addLibMaterials(parts.map(p => p.matId)); addLibEdges(parts.map(p => p.edges));
+  const now = new Date().toISOString(), room = newRoom(it.sheets ? 'Cutting plan' : 'Parts list');
+  room.parts = parts.map(p => ({ id:uid(), name:p.name, L:p.L, W:p.W, qty:p.qty, matId:p.matId, set:p.set || '', edges:p.edges || '' }));
+  room.items = (it.items || []).slice();
+  const p = { id:uid(), name:ent.name, client:'', addr:'', created:now, updated:now, fromOptimik:ent.id, rooms:[room] };
+  if (it.sheets) p.optimikSheets = it.sheets;
+  S.projects.push(p); save(); toast('Copied "' + ent.name + '" to your projects.'); go('room', { pid:p.id, rid:room.id, tab:'cut', wall:0, sel:null });
+}
+/* insert an Optimik cabinet template into the current wall */
+async function openTplPicker() {
+  modal('<p><span class="spinner"></span> Loading cabinet templates…</p>');
+  try { await libLoadIndex(); } catch (e) {}
+  if (!LIBX || !LIBX.templates) { modal(`<p>The Optimik library isn't loaded yet.</p><button onclick="modal('')">Close</button>`); return; }
+  V.tplQ = V.tplQ || ''; tplPickerRender();
+}
+function tplPickerRender() {
+  const q = V.tplQ.toLowerCase(), list = LIBX.templates.filter(t => !q || t.name.toLowerCase().includes(q)).slice(0, 60);
+  modal(`<h2 style="margin-top:0">Add an Optimik cabinet</h2><input id="tplQ" placeholder="Search e.g. 600, drawer, pantry, BIC…" style="width:100%" value="${esc(V.tplQ)}" oninput="V.tplQ=this.value;clearTimeout(window._tq);window._tq=setTimeout(()=>{tplPickerRender();const i=$('#tplQ');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)">
+    <div style="max-height:50vh;overflow:auto;margin-top:8px"><table>${list.map(t => `<tr style="cursor:pointer" onclick="insertTpl('${t.id}')"><td><b>${esc(t.name)}</b></td><td class="small">${t.X} × ${t.Y} × ${t.Z}</td></tr>`).join('') || '<tr><td class="muted">No matches.</td></tr>'}</table></div>
+    <div class="row" style="margin-top:10px"><button onclick="modal('')">Cancel</button></div>`);
+}
+async function insertTpl(id) {
+  const t = await libItem(id); if (!t) return;
+  const w = curWall(), zone = tplZone(t);
+  const u = { id:uid(), type:'tpl', zone, tpl:{ name:t.name, parts:t.parts, items:t.items }, w:t.X || 600, h:t.Y || 720, d:t.Z || 560, x:0,
+    elev: zone === 'upper' ? R_().wallElev : 0, doors:0, shelves:0, drawers:0, status:'new' };
+  u.x = laneEnd(w, u);
+  addLibMaterials(tplParts(t, u.w, u.h, u.d).map(p => p.matId)); addLibEdges(tplParts(t, u.w, u.h, u.d).map(p => p.edges));
+  w.units.push(u); V.sel = u.id; modal(''); touch(); render();
+}
+/* root: upload the library file */
+function libraryUploadCard() {
+  return `<div class="card"><h3 style="margin-top:0">Optimik library (all old program data)</h3>
+    <p class="small muted">Upload <b>optimik-library.json</b> from your Saw Wood Works folder. Every user can then open all old jobs, cutting plans, cabinet templates and price lists.</p>
+    <label class="btn">⬆ Upload library file<input type="file" accept=".json,application/json" style="display:none" onchange="uploadLibrary(this.files[0])"></label>
+    <div id="libMsg">${LIBX ? `<p class="small">Loaded: ${LIBX.jobs.length} jobs, ${LIBX.plans.length} plans, ${(LIBX.templates || []).length} templates.</p>` : ''}</div></div>`;
+}
+async function uploadLibrary(f) {
+  if (!f) return; const msg = t => { const el = $('#libMsg'); if (el) el.innerHTML = t; };
+  msg('<span class="spinner"></span> Reading file…');
+  let lib; try { lib = JSON.parse(await f.text()); if (lib.kind !== 'optimik-library') throw 0; } catch (e) { return msg('<div class="msg bad">That is not the Optimik library file.</div>'); }
+  const index = { v:lib.v || 1, materials:lib.materials, edges:lib.edges, groups:lib.groups || {}, hardware:lib.hardware || [], edgeList:lib.edgeList || [], stock:lib.stock || [], jobs:[], plans:[], templates:[], imgChunks:[] };
+  const chunks = [{}]; let size = 0;
+  const add = (key, val) => { const s = JSON.stringify(val).length; if (size + s > 700000) { chunks.push({}); size = 0; } chunks[chunks.length - 1][key] = val; size += s; return chunks.length - 1; };
+  lib.plans.forEach(x => { const n = add(x.id, x); index.plans.push({ id:x.id, name:x.name, ns:x.sheets.length, np:x.sheets.reduce((a, s) => a + s.parts.length, 0), chunk:n }); });
+  lib.jobs.forEach(x => { const n = add(x.id, x); index.jobs.push({ id:x.id, name:x.name, date:x.date, np:x.parts.length, chunk:n }); });
+  (lib.templates || []).forEach(x => { const n = add(x.id, x); index.templates.push({ id:x.id, name:x.name, group:x.group, X:x.X, Y:x.Y, Z:x.Z, np:x.parts.length, chunk:n }); });
+  chunks.push({}); size = 0; const first = chunks.length - 1;
+  Object.entries(lib.images || {}).forEach(([k, v]) => add('img:' + k, v));
+  for (let i = first; i < chunks.length; i++) index.imgChunks.push(i);
+  try {
+    if (CLOUD) {
+      for (let i = 0; i < chunks.length; i++) { msg(`<span class="spinner"></span> Uploading part ${i + 1} of ${chunks.length + 1}…`); await FB.F.setDoc(FB.F.doc(FB.db, 'library/c' + i), { data:JSON.stringify(chunks[i]) }); }
+      await FB.F.setDoc(FB.F.doc(FB.db, 'library/index'), { data:JSON.stringify(index), uploaded:new Date().toISOString(), by:ME.uid });
+    } else await DB.set('library', { index, items:Object.assign({}, ...chunks) });
+    LIBX = index; LIBC = CLOUD ? {} : Object.assign({}, ...chunks);
+    msg(`<div class="msg ok">✔ Library uploaded: ${index.jobs.length} jobs, ${index.plans.length} cutting plans, ${index.templates.length} cabinet templates, ${index.materials.length} materials and the price lists.</div>`);
+  } catch (e) { msg(`<div class="msg bad">Upload failed: ${esc(e.code || e.message)}</div>`); }
+}
+/* loose parts + hardware in a room */
+function loosePartsCard(r) {
+  const ps = r.parts || [], mats = S.settings.materials;
+  return `<h2>Loose parts</h2><div class="card"><p class="small muted" style="margin-top:0">Parts that aren't part of a drawn cupboard (copied Optimik jobs land here). They're included in the boards and cutting layouts above.</p>
+  ${ps.length ? `<div class="tablewrap"><table><tr><th>Cabinet / set</th><th>Part</th><th>Length</th><th>Width</th><th>Qty</th><th>Material</th><th>Edging</th><th></th></tr>
+  ${ps.map((p, i) => `<tr><td><input value="${esc(p.set)}" style="width:110px" onchange="setLoose(${i},'set',this.value)"></td><td><input value="${esc(p.name)}" style="width:150px" onchange="setLoose(${i},'name',this.value)"></td>
+    ${['L','W','qty'].map(k => `<td><input type="number" value="${p[k]}" style="width:${k === 'qty' ? 60 : 80}px" onchange="setLoose(${i},'${k}',num(this.value)??0)"></td>`).join('')}
+    <td><select onchange="setLoose(${i},'matId',this.value)">${mats.map(m => `<option value="${m.id}" ${p.matId === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}${mats.some(m => m.id === p.matId) ? '' : '<option selected>(missing)</option>'}</select></td>
+    <td class="small">${esc(edgeText(p.edges))}</td><td><button class="small danger" onclick="R().parts.splice(${i},1);touch();render()">✕</button></td></tr>`).join('')}</table></div>` : ''}
+  <button class="small noprint" style="margin-top:8px" onclick="addLoose()">+ Add part</button></div>`;
+}
+function roomItems(r) { const all = (r.items || []).slice(); r.walls.forEach(w => w.units.forEach(u => { if (u.type === 'tpl' && u.status !== 'keep' && u.status !== 'ask') all.push(...(u.tpl.items || [])); }));
+  const m = {}; all.forEach(s => { const [n, q] = s.split('|'); m[n] = (m[n] || 0) + (+q || 1); }); return Object.entries(m).map(([n, q]) => n + '|' + q); }
+function setLoose(i, k, v) { R().parts[i][k] = v; touch(); render(); }
+function addLoose() { const r = R(); r.parts = r.parts || []; r.parts.push({ id:uid(), name:'Part', L:600, W:400, qty:1, matId:roomMats(r).carcass, set:'', edges:'' }); touch(); render(); }
+
+/* ============ edge banding totals ============ */
+function edgeName(id) { const e = (S.settings.edges || []).find(x => x.id === id); if (e) return e.name; return (LIBX && LIBX.edges && LIBX.edges[id]) || ('Edging ' + id); }
+function edgePrice(id) { const e = (S.settings.edges || []).find(x => x.id === id); if (e) return +e.price || 0; const l = LIBX && (LIBX.edgeList || []).find(x => x.id === id); return l ? +l.price || 0 : 0; }
+function edgeTotals(parts) {
+  const m = {};
+  parts.forEach(p => { if (!p.edges) return; const e = p.edges.split(','); [p.L, p.L, p.W, p.W].forEach((len, i) => { const id = e[i]; if (id && id !== '0') m[id] = (m[id] || 0) + (+p.qty || 1) * len / 1000; }); });
+  return Object.entries(m).map(([id, metres]) => ({ id, name:edgeName(id), metres, buy:metres * (1 + (+S.settings.edgeWaste || 10) / 100), price:edgePrice(id) }));
+}
+function edgeTable(parts) {
+  const t = edgeTotals(parts); if (!t.length) return '';
+  return `<h2>Edge banding</h2><div class="card"><table><tr><th>Edging</th><th>Metres</th><th>To buy (+${+S.settings.edgeWaste || 10}%)</th><th>Price / m</th><th>Cost</th></tr>
+    ${t.map(e => `<tr><td>${esc(e.name)}</td><td>${e.metres.toFixed(1)}</td><td><b>${Math.ceil(e.buy)}</b></td><td>R ${e.price.toFixed(2)}</td><td>R ${(Math.ceil(e.buy) * e.price).toFixed(2)}</td></tr>`).join('')}</table></div>`;
+}
+function addLibEdges(edgeStrs) {
+  const ids = new Set(); edgeStrs.forEach(s => (s || '').split(',').forEach(v => { if (v && v !== '0') ids.add(v); }));
+  S.settings.edges = S.settings.edges || [];
+  ids.forEach(id => { if (!S.settings.edges.some(e => e.id === id)) { const l = LIBX && (LIBX.edgeList || []).find(x => x.id === id); S.settings.edges.push({ id, name:l ? (l.name || l.code) : edgeName(id), price:l ? l.price : 0 }); } });
+}
+
+/* ============ quotes on the letterhead ============ */
+const money = v => 'R ' + (+v || 0).toLocaleString('en-ZA', { minimumFractionDigits:2, maximumFractionDigits:2 });
+function hwPrice(name) { const n = (name || '').trim().toLowerCase(); const h = (S.settings.hardware || []).find(x => x.name.trim().toLowerCase() === n); return h ? +h.price || 0 : 0; }
+function projectItems(p) { const m = {}; p.rooms.forEach(r => roomItems(r).forEach(s => { const [n, q] = s.split('|'); m[n] = (m[n] || 0) + (+q || 1); })); return Object.entries(m); }
+function quoteLines(p) {
+  const q = p.quote || {}, parts = p.rooms.flatMap(r => roomParts(r)), packs = packAll(parts), lines = [];
+  packs.forEach(x => lines.push({ group:'Boards', desc:x.m.name + ` (${x.m.L} × ${x.m.W})`, qty:x.bins.length, unit:'sheet', price:+x.m.price || 0 }));
+  edgeTotals(parts).forEach(e => lines.push({ group:'Edge banding', desc:e.name, qty:Math.ceil(e.buy), unit:'m', price:e.price }));
+  projectItems(p).forEach(([n, qty]) => lines.push({ group:'Hardware', desc:n, qty, unit:'each', price:hwPrice(n) }));
+  if (+q.hours) lines.push({ group:'Labour', desc:'Manufacture & installation', qty:+q.hours, unit:'hour', price:+(q.rate ?? S.settings.labourRate ?? 0) });
+  (q.extras || []).forEach(e => lines.push({ group:'Other', desc:e.desc, qty:+e.qty || 0, unit:e.unit || 'each', price:+e.price || 0 }));
+  return lines;
+}
+function quoteTotals(p) {
+  const q = p.quote || {}, lines = quoteLines(p), cost = lines.reduce((a, l) => a + l.qty * l.price, 0);
+  const markup = cost * (+(q.markup ?? S.settings.markup ?? 0)) / 100, sub = cost + markup, vat = (q.vat ?? true) ? sub * 0.15 : 0;
+  return { lines, cost, markup, sub, vat, total:sub + vat };
+}
+function viewQuote() {
+  const p = P(); if (!p) return '';
+  p.quote = p.quote || { no:'Q' + new Date().toISOString().slice(2, 10).replace(/-/g, '') + '-' + Math.floor(Math.random() * 90 + 10), date:new Date().toISOString().slice(0, 10), hours:0, extras:[], notes:S.settings.quoteTerms || DEF_TERMS_Q, vat:true };
+  const q = p.quote, T = quoteTotals(p), showMark = +(q.markup ?? S.settings.markup ?? 0);
+  const setQ = (k, isNum) => `onchange="P().quote['${k}']=${isNum ? 'num(this.value)??0' : 'this.value'};touch();render()"`;
+  const groups = {}; T.lines.forEach(l => (groups[l.group] = groups[l.group] || []).push(l));
+  const missing = T.lines.filter(l => !l.price && l.qty).length;
+  return `${asBanner()}<div class="noprint"><a href="#" onclick="go('project');return false">← ${esc(p.name)}</a></div>
+  <div class="card noprint"><div class="row">
+    <div><label>Quote no.</label><input value="${esc(q.no)}" ${setQ('no')}></div><div><label>Date</label><input type="date" value="${esc(q.date)}" ${setQ('date')}></div>
+    <div><label>Labour hours</label><input type="number" value="${q.hours || 0}" ${setQ('hours', 1)}></div>
+    <div><label>Rate / hour</label><input type="number" value="${q.rate ?? S.settings.labourRate ?? 0}" ${setQ('rate', 1)}></div>
+    <div><label>Markup %</label><input type="number" value="${showMark}" ${setQ('markup', 1)}></div>
+    <div><label>VAT 15%</label><select onchange="P().quote.vat=this.value==='1';touch();render()"><option value="1" ${q.vat !== false ? 'selected' : ''}>Add VAT</option><option value="0" ${q.vat === false ? 'selected' : ''}>No VAT</option></select></div>
+    <button class="primary" onclick="window.print()">🖨 Print / save PDF</button></div>
+    ${missing ? `<div class="msg warn small">${missing} line(s) have no price yet. Add prices under Settings → Prices (board, edging and hardware prices), or load them from the Optimik library.</div>` : ''}
+    <details style="margin-top:8px"><summary>Extra lines (delivery, worktops, appliances…)</summary>
+      ${(q.extras || []).map((e, i) => `<div class="row" style="margin-top:6px"><input value="${esc(e.desc)}" placeholder="Description" style="width:260px" onchange="P().quote.extras[${i}].desc=this.value;touch();render()">
+        <input type="number" value="${e.qty}" style="width:70px" onchange="P().quote.extras[${i}].qty=num(this.value)??0;touch();render()">
+        <input type="number" value="${e.price}" style="width:100px" onchange="P().quote.extras[${i}].price=num(this.value)??0;touch();render()">
+        <button class="small danger" onclick="P().quote.extras.splice(${i},1);touch();render()">✕</button></div>`).join('')}
+      <button class="small" style="margin-top:6px" onclick="P().quote.extras=(P().quote.extras||[]).concat([{desc:'Delivery',qty:1,price:0}]);touch();render()">+ Add line</button></details>
+    <label style="margin-top:8px">Notes / terms on the quote</label><textarea rows="3" style="width:100%" onchange="P().quote.notes=this.value;touch()">${esc(q.notes || '')}</textarea></div>
+  <div class="card" style="padding:0">${letterheadHTML(LH)}<div style="padding:14px">
+    <div class="row" style="align-items:flex-start"><div style="flex:1"><div style="font-size:24px;font-weight:800;letter-spacing:1px">QUOTATION</div>
+      <div class="small">Quote no. <b>${esc(q.no)}</b> · Date ${esc(q.date)}</div></div>
+      <div class="small" style="text-align:right"><b>To:</b> ${esc(p.client || '—')}<br>${esc(p.addr || '')}<br><b>Project:</b> ${esc(p.name)}</div></div>
+    <table style="margin-top:12px"><tr><th>Description</th><th style="text-align:right">Qty</th><th>Unit</th><th style="text-align:right">Price</th><th style="text-align:right">Amount</th></tr>
+      ${Object.entries(groups).map(([g, ls]) => `<tr><td colspan="5" style="background:#f6f1ea"><b>${esc(g)}</b></td></tr>` + ls.map(l => `<tr><td>${esc(l.desc)}</td><td style="text-align:right">${+l.qty.toFixed ? +(+l.qty).toFixed(2) : l.qty}</td><td>${esc(l.unit)}</td><td style="text-align:right">${money(l.price)}</td><td style="text-align:right">${money(l.qty * l.price)}</td></tr>`).join('')).join('')}
+      ${T.markup ? `<tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${money(T.cost)}</td></tr><tr><td colspan="4" style="text-align:right">Markup (${showMark}%)</td><td style="text-align:right">${money(T.markup)}</td></tr>` : ''}
+      <tr><td colspan="4" style="text-align:right"><b>Total excl. VAT</b></td><td style="text-align:right"><b>${money(T.sub)}</b></td></tr>
+      ${q.vat !== false ? `<tr><td colspan="4" style="text-align:right">VAT 15%</td><td style="text-align:right">${money(T.vat)}</td></tr>` : ''}
+      <tr><td colspan="4" style="text-align:right;font-size:17px"><b>TOTAL</b></td><td style="text-align:right;font-size:17px"><b>${money(T.total)}</b></td></tr></table>
+    ${q.notes ? `<p class="small" style="white-space:pre-wrap;margin-top:14px">${esc(q.notes)}</p>` : ''}</div></div>`;
+}
+const sheetPrice = (perM2, m) => Math.round(perM2 * m.L * m.W / 1e4) / 100;   // Optimik stores board prices per m²
+const DEF_TERMS_Q = 'Quote valid for 30 days.\nAll sizes to be confirmed on site before manufacture.';
+function loadLibPrices() {
+  if (!LIBX) return toast('Open the Optimik library first so it can be read.');
+  let n = 0;
+  S.settings.materials.forEach(m => { const l = LIBX.materials.find(x => x.id === m.id || x.name === m.name); if (l && l.price && !m.price) { m.price = sheetPrice(l.price, m); n++; } });
+  S.settings.hardware = S.settings.hardware || [];
+  (LIBX.hardware || []).forEach(h => { if (!S.settings.hardware.some(x => x.name.trim().toLowerCase() === h.name.trim().toLowerCase())) { S.settings.hardware.push({ name:h.name, unit:h.unit, price:h.price }); n++; } });
+  (S.settings.edges || []).forEach(e => { const l = (LIBX.edgeList || []).find(x => x.id === e.id); if (l && !e.price) { e.price = l.price; n++; } });
+  save(); render(); toast(n + ' price(s) loaded from the Optimik library.');
+}
+function pricesCard() {
+  const s = S.settings; s.edges = s.edges || []; s.hardware = s.hardware || [];
+  const inp = (path, v, w = 90, t = 'number') => `<input type="${t}" value="${esc(v ?? '')}" style="width:${w}px" onchange="${path}=${t === 'number' ? 'num(this.value)??0' : 'this.value'};save()">`;
+  return `<div class="card"><h3 style="margin-top:0">Prices &amp; quotes</h3>
+    <div class="row"><div><label>Labour rate / hour</label>${inp('S.settings.labourRate', s.labourRate ?? 0)}</div><div><label>Default markup %</label>${inp('S.settings.markup', s.markup ?? 0)}</div>
+      <div><label>Edging waste %</label>${inp('S.settings.edgeWaste', s.edgeWaste ?? 10)}</div>
+      <button onclick="openLibrary('prices').then(()=>{go('settings');loadLibPrices()})">Load prices from Optimik library</button></div>
+    <h3>Board prices (per sheet)</h3><table>${s.materials.map((m, i) => `<tr><td>${esc(m.name)}</td><td>${inp(`S.settings.materials[${i}].price`, m.price || 0)}</td></tr>`).join('')}</table>
+    <h3>Edge banding (price per metre)</h3><table><tr><th>Name</th><th>Price / m</th><th></th></tr>${s.edges.map((e, i) => `<tr><td>${inp(`S.settings.edges[${i}].name`, e.name, 220, 'text')}</td><td>${inp(`S.settings.edges[${i}].price`, e.price || 0)}</td><td><button class="small danger" onclick="S.settings.edges.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table>
+    <button class="small" onclick="S.settings.edges.push({id:'e'+uid(),name:'New edging',price:0});save();render()">+ Add edging</button>
+    <div class="row" style="margin-top:8px">${[['edgeCarcass','Edging on cupboard fronts'],['edgeDoors','Edging on doors & drawer fronts']].map(([k, l]) => `<div><label>${l}</label><select onchange="S.settings.roles['${k}']=this.value;save()"><option value="">None</option>${s.edges.map(e => `<option value="${e.id}" ${s.roles[k] === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('')}</select></div>`).join('')}</div>
+    <h3>Hardware &amp; other items</h3><table><tr><th>Item</th><th>Unit</th><th>Price</th><th></th></tr>${s.hardware.map((h, i) => `<tr><td>${inp(`S.settings.hardware[${i}].name`, h.name, 220, 'text')}</td><td>${inp(`S.settings.hardware[${i}].unit`, h.unit, 70, 'text')}</td><td>${inp(`S.settings.hardware[${i}].price`, h.price || 0)}</td><td><button class="small danger" onclick="S.settings.hardware.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table>
+    <button class="small" onclick="S.settings.hardware.push({name:'New item',unit:'each',price:0});save();render()">+ Add item</button>
+    <label style="margin-top:10px">Default notes / terms on quotes</label><textarea rows="3" style="width:100%" onchange="S.settings.quoteTerms=this.value;save()">${esc(s.quoteTerms ?? DEF_TERMS_Q)}</textarea></div>`;
+}
+
 function mergeSettings(s) {
   const d = JSON.parse(JSON.stringify(DEF_SETTINGS));
   if (!s) return d;
   return { ...d, ...s, rules:{ ...d.rules, ...(s.rules||{}) }, roles:{ ...d.roles, ...(s.roles||{}) },
-           materials: (s.materials && s.materials.length) ? s.materials : d.materials };
+           materials: (s.materials && s.materials.length) ? s.materials : d.materials, edges: s.edges || d.edges, hardware: s.hardware || d.hardware };
 }
 
 const P = () => S.projects.find(p => p.id === V.pid);
@@ -541,15 +832,18 @@ function newWall(i) { return { id:uid(), label:'ABCDEFGH'[i] || ('W'+(i+1)), len
 function newRoom(name) { const r = { id:uid(), name, photos:[], shape:'straight', walls:[newWall(0)], ai:null, mats:null }; return r; }
 function unitDefaults(type) {
   const t = TYPES[type], Rl = R_();
-  const h = type==='wall' ? Rl.wallH : (t.zone==='both' ? Rl.tallH : Rl.baseH);
-  const d = type==='wall' ? Rl.wallD : (t.zone==='both' ? Rl.tallD : Rl.baseD);
-  return { id:uid(), type, w:t.w, h, d, x:0, elev: type==='wall' ? Rl.wallElev : 0,
-           doors:t.doors, shelves:t.shelves, drawers:t.drawers, status:'new' };
+  const up = t.zone === 'upper';
+  const h = up ? Rl.wallH : (t.zone==='both' ? Rl.tallH : Rl.baseH);
+  const d = up ? Rl.wallD : (t.zone==='both' ? Rl.tallD : Rl.baseD);
+  return { id:uid(), type, w:t.w, h, d, x:0, elev: up ? Rl.wallElev : 0,
+           doors:t.doors, shelves:t.shelves, drawers:t.drawers, blind:t.blind || 0, status:'new' };
 }
-const lanes = type => { const z = TYPES[type].zone; return z==='both' ? ['floor','upper'] : [z]; };
+const zoneOf = u => u.type === 'tpl' ? (u.zone || 'floor') : TYPES[u.type].zone;
+const typeLabel = u => u.type === 'tpl' ? 'Optimik: ' + u.tpl.name : TYPES[u.type].label;
+const lanes = x => { const z = typeof x === 'string' ? TYPES[x].zone : zoneOf(x); return z==='both' ? ['floor','upper'] : [z]; };
 function laneEnd(wall, type) {
   const ls = lanes(type); let end = 0;
-  wall.units.forEach(u => { if (lanes(u.type).some(l => ls.includes(l))) end = Math.max(end, (+u.x||0) + (+u.w||0)); });
+  wall.units.forEach(u => { if (lanes(u).some(l => ls.includes(l))) end = Math.max(end, (+u.x||0) + (+u.w||0)); });
   return end;
 }
 function unitRef(wall, u) { return wall.label + (wall.units.indexOf(u) + 1); }
@@ -566,27 +860,32 @@ function setShape(room, shape) {
 
 /* ============ cupboard → parts ============ */
 function unitParts(u) {
+  if (u.type === 'tpl') return tplParts(u.tpl, +u.w, +u.h, +u.d).map(p => ({ name:p.name, L:p.L, W:p.W, qty:p.qty, role:'tpl', matId:p.matId, edges:p.edges }));
   const Rl = R_(), t = Rl.t, out = [], zone = TYPES[u.type].zone;
   const W = +u.w, H = +u.h, D = +u.d, iw = W - 2*t;
-  const add = (name, L, Wd, qty, role='carcass') => { if (qty > 0 && L > 0 && Wd > 0) out.push({ name, L:r0(L), W:r0(Wd), qty, role }); };
+  const ec = S.settings.roles.edgeCarcass || '', ed = S.settings.roles.edgeDoors || '';
+  const EDGE = { front: ec ? ec + ',0,0,0' : '', all: ed ? [ed, ed, ed, ed].join(',') : '', none:'' };
+  const add = (name, L, Wd, qty, role='carcass', edge) => { if (qty > 0 && L > 0 && Wd > 0) out.push({ name, L:r0(L), W:r0(Wd), qty, role, edges: edge !== undefined ? EDGE[edge] : (role === 'doors' ? EDGE.all : role === 'backs' ? '' : EDGE.front) }); };
+  const blind = TYPES[u.type].blind ? Math.max(0, +u.blind || 0) : 0, FW = W - blind;
   add('Side', H, D, 2);
   if (zone === 'floor') { add('Bottom', iw, D, 1); add('Top rail', iw, Rl.railW, 2); }
   else { add('Top', iw, D, 1); add('Bottom', iw, D, 1); }
   add('Shelf', iw, D - Rl.shelfSet - Rl.back, +u.shelves||0);
   add('Back', H, W, 1, 'backs');
+  if (blind > 0) add('Blind panel', H - Rl.gap, blind + t, 1, 'doors');
   if (zone !== 'upper' && Rl.kick > 0) add('Kick', W, Rl.kick, 1);
   const nd = +u.doors||0, nr = +u.drawers||0;
   if (nr > 0) {
     const doorZone = nd > 0 ? H/2 : H;           // drawers + doors combo: drawers take top half
     const fh = (doorZone - Rl.gap*nr) / nr;
-    add('Drawer front', W - Rl.gap, fh, nr, 'doors');
+    add('Drawer front', FW - Rl.gap, fh, nr, 'doors');
     const bh = Math.max(80, fh - Rl.drawerClear), bl = D - 50;
     add('Drawer side', bl, bh, 2*nr);
     add('Drawer front/back', iw - Rl.slide - 2*t, bh, 2*nr);
     add('Drawer bottom', iw - Rl.slide, bl, nr, 'backs');
-    if (nd > 0) add('Door', H/2 - Rl.gap, (W - Rl.gap*nd)/nd, nd, 'doors');
+    if (nd > 0) add('Door', H/2 - Rl.gap, (FW - Rl.gap*nd)/nd, nd, 'doors');
   } else if (nd > 0) {
-    add('Door', H - Rl.gap, (W - Rl.gap*nd)/nd, nd, 'doors');
+    add('Door', H - Rl.gap, (FW - Rl.gap*nd)/nd, nd, 'doors');
   }
   return out;
 }
@@ -595,8 +894,9 @@ function roomParts(room) {
   const roles = roomMats(room), list = [];
   room.walls.forEach(w => w.units.forEach(u => {
     if (u.status === 'keep' || u.status === 'ask') return;
-    unitParts(u).forEach(p => list.push({ ...p, ref: unitRef(w, u), matId: roles[p.role] }));
+    unitParts(u).forEach(p => list.push({ ...p, ref: unitRef(w, u), matId: p.matId || roles[p.role] }));
   }));
+  (room.parts || []).forEach(p => { if (+p.L > 0 && +p.W > 0 && +p.qty > 0) list.push({ name:p.name, L:r0(+p.L), W:r0(+p.W), qty:+p.qty, role:'carcass', ref:p.set || 'Loose parts', matId:p.matId, edges:p.edges }); });
   return list;
 }
 
@@ -647,10 +947,10 @@ function packMaterial(parts, m) {
   const usage = bins.length ? area / (bins.length * m.L * m.W) : 0;
   return { bins, over, usage, SW, SH, k };
 }
-function packAll(parts) {
+function packAll(parts, lookup = mat) {
   const byMat = {};
   parts.forEach(p => (byMat[p.matId] = byMat[p.matId] || []).push(p));
-  return Object.entries(byMat).map(([id, ps]) => { const m = mat(id) || { id, name:'(missing material)', L:2750, W:1830, kerf:4, trim:10, rotate:true }; return { m, parts:ps, ...packMaterial(ps, m) }; });
+  return Object.entries(byMat).map(([id, ps]) => { const m = lookup(id) || { id, name:'(missing material)', L:2750, W:1830, kerf:4, trim:10, rotate:true }; return { m, parts:ps, ...packMaterial(ps, m) }; });
 }
 
 /* ============ checks ============ */
@@ -662,7 +962,7 @@ function wallWarnings(w) {
     const ref = unitRef(w, u), x = +u.x, e = x + (+u.w);
     if (e > L) out.push(['bad', `${ref} runs ${r0(e - L)} mm past the end of wall ${w.label}.`]);
     if (x < 0) out.push(['bad', `${ref} starts before the wall (x is negative).`]);
-    const z = TYPES[u.type].zone;
+    const z = zoneOf(u);
     const top = z === 'upper' ? (+u.elev + +u.h) : (Rl.kick + +u.h + (z === 'floor' ? Rl.worktop : 0));
     if (top > H) out.push(['warn', `${ref} is ${r0(top - H)} mm higher than the ceiling height.`]);
     w.openings.forEach(o => {
@@ -675,11 +975,11 @@ function wallWarnings(w) {
   });
   for (let i = 0; i < w.units.length; i++) for (let j = i+1; j < w.units.length; j++) {
     const a = w.units[i], b = w.units[j];
-    if (!lanes(a.type).some(l => lanes(b.type).includes(l))) continue;
+    if (!lanes(a).some(l => lanes(b).includes(l))) continue;
     if (+a.x < +b.x + +b.w && +b.x < +a.x + +a.w) out.push(['bad', `${unitRef(w,a)} and ${unitRef(w,b)} overlap.`]);
   }
   const fe = laneEnd(w, 'base');
-  if (w.units.some(u => lanes(u.type).includes('floor')) && L - fe > 0) out.push(['ok', `${r0(L - fe)} mm free at the end of the floor run on wall ${w.label}.`]);
+  if (w.units.some(u => lanes(u).includes('floor')) && L - fe > 0) out.push(['ok', `${r0(L - fe)} mm free at the end of the floor run on wall ${w.label}.`]);
   return out;
 }
 
@@ -707,7 +1007,7 @@ function planSVG(room, opts = {}) {
       const d = +u.d || 300, a = P(+u.x), b = P(+u.x + +u.w);
       const poly = [a, b, [b[0]+s.nx*d, b[1]+s.ny*d], [a[0]+s.nx*d, a[1]+s.ny*d]].map(p => p.join(',')).join(' ');
       const fill = u.status === 'keep' ? 'var(--keep)' : u.status === 'replace' ? 'var(--repl)' : u.status === 'ask' ? 'var(--ai)' : 'var(--new)';
-      const upper = TYPES[u.type].zone === 'upper';
+      const upper = zoneOf(u) === 'upper';
       g += `<polygon points="${poly}" fill="${upper ? 'none' : fill}" stroke="#6b4a2e" stroke-width="2" ${upper ? 'stroke-dasharray="8 6"' : ''} vector-effect="non-scaling-stroke"/>`;
       const cx = (a[0]+b[0])/2 + s.nx*d/2, cy = (a[1]+b[1])/2 + s.ny*d/2;
       g += `<text x="${cx}" y="${cy + (upper ? fs : 0)}" font-size="${fs*0.8}" text-anchor="middle" dominant-baseline="middle" fill="#3b2a1d">${esc(unitRef(s.w,u))}</text>`;
@@ -734,7 +1034,7 @@ function elevSVG(room, w, opts = {}) {
     g += `<text x="${+o.x + +o.w/2}" y="${Y(z0 + +o.h/2)}" font-size="${fs*0.7}" text-anchor="middle" fill="#666">${o.type}</text>`;
   });
   w.units.forEach(u => {
-    const z = TYPES[u.type].zone, x = +u.x, uw = +u.w, uh = +u.h;
+    const z = zoneOf(u), x = +u.x, uw = +u.w, uh = +u.h;
     const fill = u.status === 'keep' ? 'var(--keep)' : u.status === 'replace' ? 'var(--repl)' : u.status === 'ask' ? 'var(--ai)' : 'var(--new)';
     const z0 = z === 'upper' ? +u.elev : Rl.kick;
     const sel = V.sel === u.id;
@@ -745,6 +1045,8 @@ function elevSVG(room, w, opts = {}) {
     for (let i = 1; i < nr; i++) g += `<line x1="${x}" x2="${x+uw}" y1="${Y(z0+uh - drawerZone*i/nr)}" y2="${Y(z0+uh - drawerZone*i/nr)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
     if (nr && nd) g += `<line x1="${x}" x2="${x+uw}" y1="${Y(z0+uh/2)}" y2="${Y(z0+uh/2)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
     for (let i = 1; i < nd; i++) g += `<line x1="${x+uw*i/nd}" x2="${x+uw*i/nd}" y1="${Y(z0 + (uh-drawerZone))}" y2="${Y(z0)}" stroke="#6b4a2e" vector-effect="non-scaling-stroke"/>`;
+    const bl = TYPES[u.type] && TYPES[u.type].blind ? +u.blind || 0 : 0;
+    if (bl) g += `<rect x="${x + uw - bl}" y="${Y(z0+uh)}" width="${bl}" height="${uh}" fill="#00000018" stroke="#6b4a2e" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>`;
     g += `<text x="${x+uw/2}" y="${Y(z0+uh/2)}" font-size="${fs*0.8}" text-anchor="middle" dominant-baseline="middle" font-weight="700" fill="#3b2a1d">${esc(unitRef(w,u))}</text>`;
     g += `<text x="${x+uw/2}" y="${Y(z0+uh/2)+fs}" font-size="${fs*0.6}" text-anchor="middle" fill="#3b2a1d">${r0(uw)}</text></g>`;
     if (z === 'floor') g += `<rect x="${x}" y="${Y(Rl.kick+uh+Rl.worktop)}" width="${uw}" height="${Rl.worktop}" fill="#8d8d8d"/>`;
@@ -805,6 +1107,9 @@ function render() {
   if (V.view === 'noaccess' || V.view === 'blocked') { a.innerHTML = viewNoAccess(V.view === 'blocked'); return; }
   if (CLOUD && (!ME || !ME.role || !DU)) { a.innerHTML = '<p class="muted">Connecting…</p>'; return; }
   if (V.view === 'users') { a.innerHTML = viewUsers(); return; }
+  if (V.view === 'library') { a.innerHTML = viewLibrary(); return; }
+  if (V.view === 'libitem') { a.innerHTML = viewLibItem(); return; }
+  if (V.view === 'quote' && P()) { a.innerHTML = viewQuote(); return; }
   if (V.view === 'letterhead') { a.innerHTML = viewLetterhead(); renderNav(); return; }
   if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
   if (V.view === 'settings') a.innerHTML = viewSettings();
@@ -825,7 +1130,8 @@ function viewProjects() {
      <b>${esc(p.name)}</b><div class="muted small">${esc(p.client||'')}${p.addr ? ' · '+esc(p.addr) : ''}</div>
      <div class="small" style="margin-top:6px">${p.rooms.length} room(s) · ${p.rooms.reduce((a,r)=>a+r.walls.reduce((b,w)=>b+w.units.length,0),0)} cupboard(s)</div>
      <div class="muted small">Updated ${esc((p.updated||'').slice(0,10))}</div></div>`).join('')}</div>`
-   : `<p class="muted">No projects yet. Create one above, then add a room and take photos of it.</p>`}`;
+   : `<p class="muted">No projects yet. Create one above, then add a room and take photos of it.</p>`}
+  ${libraryCard()}`;
 }
 function addProject() {
   const name = $('#npName').value.trim(); if (!name) return alert('Enter a project name.');
@@ -854,7 +1160,10 @@ function viewProject() {
     <div style="margin:6px 0">${planSVG(r, { maxH:150 })}</div>
     <div class="row"><button class="primary" onclick="go('room',{rid:'${r.id}',tab:'${r.photos.length || r.walls[0].length ? 'room' : 'photos'}',wall:0,sel:null})">Open</button>
     <button class="danger small" onclick="delRoom('${r.id}')">Delete</button></div></div>`).join('') || '<p class="muted">No rooms yet.</p>'}</div>
-  ${parts.length ? `<h2>Boards for the whole project</h2>${boardsSummary(packs)}
+  ${p.note ? `<p class="small muted">${esc(p.note)}</p>` : ''}
+  ${p.optimikSheets ? `<h2>Saved Optimik cutting layout</h2>${p.optimikSheets.map((s, i) => `<div class="card"><b>Sheet ${i+1} of ${p.optimikSheets.length}</b> <span class="muted small">(${s.L} × ${s.W}, ${s.usage}% used)</span>${savedSheetSVG(s)}</div>`).join('')}` : ''}
+  <div class="row noprint" style="margin:10px 0"><button class="primary" onclick="go('quote')">💰 Quote for this project</button></div>
+  ${parts.length ? `<h2>Boards for the whole project</h2>${boardsSummary(packs)}${edgeTable(parts)}
     <div class="noprint"><button onclick="window.print()">🖨 Print</button></div>` : ''}`;
 }
 function addRoom() { const n = $('#nrName').value.trim() || 'Room ' + (P().rooms.length + 1); const r = newRoom(n); P().rooms.push(r); touch(); go('room', { rid:r.id, tab:'photos', wall:0, sel:null }); }
@@ -1011,7 +1320,7 @@ function nextAsk() {
   const r = R(); if (!r) return;
   for (const w of r.walls) for (const u of w.units) if (u.status === 'ask') {
     modal(`<h2 style="margin-top:0">Existing cupboard found</h2>
-      <p><b>${esc(unitRef(w,u))}</b> on wall ${esc(w.label)} — ${esc(TYPES[u.type].label)}, ${r0(u.w)} mm wide, ${r0(u.x)} mm from the left.</p>
+      <p><b>${esc(unitRef(w,u))}</b> on wall ${esc(w.label)} — ${esc(typeLabel(u))}, ${r0(u.w)} mm wide, ${r0(u.x)} mm from the left.</p>
       <div class="svgbox" style="margin-bottom:10px">${elevSVG(r, w, { maxH:220 })}</div>
       <p>Do you want to keep it or replace it?</p>
       <div class="row"><button class="primary" onclick="decide('${w.id}','${u.id}','keep')">Keep it</button>
@@ -1065,18 +1374,20 @@ function tabUnits(r) {
     ${warns.map(([k, t]) => `<div class="msg ${k}">${esc(t)}</div>`).join('')}</div>
   <div class="card noprint"><b>Add a new cupboard to wall ${esc(w.label)}</b><div class="row" style="margin-top:6px">
     ${Object.entries(TYPES).map(([k, t]) => `<button onclick="addUnit('${k}')">+ ${t.label}</button>`).join('')}
+    <button onclick="openTplPicker()" style="border-color:var(--accent)">+ Optimik cabinet</button>
     <button onclick="addExisting()" style="border-style:dashed">+ Mark an existing cupboard</button></div>
     <div class="small muted" style="margin-top:6px">New cupboards are placed at the end of the run. Change the "From left" and "Width" boxes to move or resize them.</div></div>
   <div class="card"><div class="tablewrap"><table>
-    <tr><th>Ref</th><th>Type</th><th>From left</th><th>Width</th><th>Height</th><th>Depth</th><th>Height off floor</th><th>Doors</th><th>Shelves</th><th>Drawers</th><th>Status</th><th></th></tr>
+    <tr><th>Ref</th><th>Type</th><th>From left</th><th>Width</th><th>Height</th><th>Depth</th><th>Height off floor</th><th>Doors</th><th>Shelves</th><th>Drawers</th><th>Blind (corner)</th><th>Status</th><th></th></tr>
     ${w.units.map((u, j) => `<tr class="${V.sel===u.id?'sel':''}" onclick="if(V.sel!=='${u.id}'){V.sel='${u.id}'}">
       <td><b>${esc(unitRef(w,u))}</b></td>
-      <td><select onchange="setUnit(${j},'type',this.value)">${Object.entries(TYPES).map(([k,t]) => `<option value="${k}" ${u.type===k?'selected':''}>${t.label}</option>`).join('')}</select></td>
+      <td>${u.type === 'tpl' ? `<span class="small"><b>${esc(u.tpl.name)}</b></span><br><select class="small" onchange="setUnit(${j},'zone',this.value)">${[['floor','Floor unit'],['upper','Wall unit'],['both','Tall unit']].map(([k,l]) => `<option value="${k}" ${u.zone===k?'selected':''}>${l}</option>`).join('')}</select>` : `<select onchange="setUnit(${j},'type',this.value)">${Object.entries(TYPES).map(([k,t]) => `<option value="${k}" ${u.type===k?'selected':''}>${t.label}</option>`).join('')}</select>`}</td>
       ${['x','w','h','d'].map(f => `<td><input type="number" class="${u.ai && (f==='x'||f==='w') ? 'ai' : ''}" value="${u[f]}" onchange="setUnit(${j},'${f}',this.value)"></td>`).join('')}
-      <td>${TYPES[u.type].zone === 'upper' ? `<input type="number" value="${u.elev}" onchange="setUnit(${j},'elev',this.value)">` : `<span class="muted small">on kick</span>`}</td>
+      <td>${zoneOf(u) === 'upper' ? `<input type="number" value="${u.elev}" onchange="setUnit(${j},'elev',this.value)">` : `<span class="muted small">on kick</span>`}</td>
       ${['doors','shelves','drawers'].map(f => `<td><input type="number" min="0" style="width:60px" value="${u[f]}" onchange="setUnit(${j},'${f}',this.value)"></td>`).join('')}
+      <td>${TYPES[u.type] && TYPES[u.type].blind ? `<input type="number" min="0" style="width:70px" value="${u.blind || 0}" onchange="setUnit(${j},'blind',this.value)">` : '<span class="muted small">—</span>'}</td>
       <td><select onchange="setUnit(${j},'status',this.value)">${Object.entries(STATUS).map(([k,l]) => `<option value="${k}" ${u.status===k?'selected':''}>${l}</option>`).join('')}</select></td>
-      <td><button class="small danger" onclick="delUnit(${j})">✕</button></td></tr>`).join('') || `<tr><td colspan="12" class="muted">No cupboards on this wall yet.</td></tr>`}
+      <td><button class="small danger" onclick="delUnit(${j})">✕</button></td></tr>`).join('') || `<tr><td colspan="13" class="muted">No cupboards on this wall yet.</td></tr>`}
   </table></div></div>
   <div class="row noprint"><button class="primary" onclick="go('room',{tab:'cut'})">Next: boards & cut list →</button></div>`;
 }
@@ -1088,8 +1399,8 @@ function addExisting() { const w = curWall(), u = unitDefaults('base'); u.x = la
 function setUnit(j, f, v) {
   const u = curWall().units[j];
   if (f === 'type') {
-    const d = unitDefaults(v); Object.assign(u, { type:v, h:d.h, d:d.d, elev:d.elev, doors:d.doors, shelves:d.shelves, drawers:d.drawers });
-  } else if (f === 'status') u.status = v;
+    const d = unitDefaults(v); Object.assign(u, { type:v, h:d.h, d:d.d, elev:d.elev, doors:d.doors, shelves:d.shelves, drawers:d.drawers, blind:d.blind });
+  } else if (f === 'status' || f === 'zone') { u[f] = v; if (f === 'zone') u.elev = v === 'upper' ? R_().wallElev : 0; }
   else { u[f] = num(v) ?? 0; if (f === 'x' || f === 'w') delete u.ai; }
   V.sel = u.id; touch(); render();
 }
@@ -1109,11 +1420,12 @@ function tabCut(r) {
     <div><label>Carcass board</label>${matSel('carcass')}</div><div><label>Doors &amp; drawer fronts</label>${matSel('doors')}</div><div><label>Backs &amp; drawer bottoms</label>${matSel('backs')}</div>
     <button onclick="window.print()">🖨 Print cut list &amp; drawings</button></div></div>
   ${parts.length ? `<h2>Boards needed — ${esc(r.name)}</h2>${boardsSummary(packs)}` : `<p class="muted">No new or replacement cupboards in this room yet.</p>`}
+  ${loosePartsCard(r)}
   <h2>Drawings</h2><div class="card"><div class="svgbox">${planSVG(r, { maxH:360 })}</div></div>
   ${r.walls.filter(w => w.units.length || w.openings.length).map(w => `<div class="card"><div class="svgbox">${elevSVG(r, w, { maxH:360 })}</div></div>`).join('')}
-  ${parts.length ? `<h2>Cut list</h2><div class="card"><div class="tablewrap"><table><tr><th>Cupboard</th><th>Part</th><th>Length</th><th>Width</th><th>Qty</th><th>Material</th></tr>
-    ${Object.entries(groups).map(([ref, ps]) => ps.map((p, i) => `<tr><td>${i === 0 ? `<b>${esc(ref)}</b>` : ''}</td><td>${esc(p.name)}</td><td>${p.L}</td><td>${p.W}</td><td>${p.qty}</td><td class="small">${esc((mat(p.matId)||{}).name || '?')}</td></tr>`).join('')).join('')}
-    </table></div></div>
+  ${parts.length ? `<h2>Cut list</h2><div class="card"><div class="tablewrap"><table><tr><th>Cupboard</th><th>Part</th><th>Length</th><th>Width</th><th>Qty</th><th>Material</th><th>Edging</th></tr>
+    ${Object.entries(groups).map(([ref, ps]) => ps.map((p, i) => `<tr><td>${i === 0 ? `<b>${esc(ref)}</b>` : ''}</td><td>${esc(p.name)}</td><td>${p.L}</td><td>${p.W}</td><td>${p.qty}</td><td class="small">${esc((mat(p.matId)||{}).name || '?')}</td><td class="small">${esc(edgeText(p.edges))}</td></tr>`).join('')).join('')}
+    </table></div></div>${edgeTable(parts)}${itemsTable(roomItems(r))}
   <h2>Cutting layouts</h2>
   ${packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i+1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm, trim ${x.m.trim} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('')}
   <p class="small muted">Sizes follow the build rules in Settings (board ${R_().t} mm, back ${R_().back} mm, kick ${R_().kick} mm, door gap ${R_().gap} mm). Check before cutting.</p>` : ''}`;
@@ -1123,7 +1435,7 @@ function tabCut(r) {
 function viewSettings() {
   const s = S.settings, Rl = s.rules;
   const rule = (k, l) => `<div><label>${l}</label><input type="number" value="${Rl[k]}" onchange="S.settings.rules['${k}']=num(this.value)??0;save()"></div>`;
-  return `${CLOUD ? asBanner() : ''}<h1>Settings</h1>${accountCard()}
+  return `${CLOUD ? asBanner() : ''}<h1>Settings</h1>${accountCard()}${pricesCard()}
   <div class="card"><h3 style="margin-top:0">Build rules (mm)</h3><p class="small muted">How your cupboards are made. Sides run full height; tops, bottoms and shelves fit between the sides; backs are nailed on full size.</p>
     <div class="row">${rule('t','Board thickness')}${rule('back','Back thickness')}${rule('kick','Kick height')}${rule('worktop','Worktop thickness')}${rule('railW','Top rail width')}${rule('shelfSet','Shelf set-back')}${rule('gap','Door gap')}</div>
     <div class="row" style="margin-top:8px">${rule('baseH','Base carcass height')}${rule('baseD','Base depth')}${rule('wallH','Wall unit height')}${rule('wallD','Wall unit depth')}${rule('wallElev','Wall unit height off floor')}${rule('tallH','Tall carcass height')}${rule('tallD','Tall depth')}</div>
@@ -1146,6 +1458,7 @@ function viewSettings() {
     <div class="row"><div style="flex:1;min-width:240px"><label>Anthropic API key</label><input type="password" style="width:100%" value="${esc(s.apiKey)}" placeholder="sk-ant-…" onchange="S.settings.apiKey=this.value.trim();S.settings.model='';save()"></div>`}
     <div><label>Model</label><input value="${esc(s.model)}" placeholder="auto" onchange="S.settings.model=this.value.trim();save()" style="width:220px"></div>
     <button onclick="testKey()">Test key</button></div><div class="small muted">Keys are stored only on this device.</div><div id="keyMsg"></div></div>
+  ${!CLOUD ? libraryUploadCard() : ''}
   <div class="card"><h3 style="margin-top:0">Backup</h3><div class="row">
     <button onclick="exportData()">⬇ Download backup</button>
     <label class="btn">⬆ Restore backup<input type="file" accept=".json,application/json" style="display:none" onchange="importData(this.files[0])"></label></div></div>
