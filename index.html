@@ -205,7 +205,7 @@ function softRender() {
   if (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && !$('#modal').contains(a)) { pendingRender = true; return; }
   render();
 }
-document.addEventListener('focusout', () => { if (pendingRender) { pendingRender = false; setTimeout(render, 0); } });
+document.addEventListener('focusout', () => { if (pendingRender) setTimeout(() => { const a = document.activeElement; if (!pendingRender || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && !$('#modal').contains(a))) return; pendingRender = false; render(); }, 0); });
 
 /* ---- passwords: letters + numbers + special characters ---- */
 function pwProblem(p) {
@@ -509,7 +509,7 @@ function renderNav() {
   const nav = document.querySelector('header nav'); if (!nav) return;
   if (CLOUD && (!ME || !ME.role)) { nav.innerHTML = ''; return; }
   const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v ? 'class="on"' : ''}>${l}</button>`;
-  nav.innerHTML = b('projects', 'Projects') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
+  nav.innerHTML = b('projects', 'Projects') + b('calc', 'Board calculator') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
 }
 
 /* ---- account card in Settings ---- */
@@ -1156,9 +1156,9 @@ function packMaterial(parts, m) {
   for (const p of items) {
     const w = p.L + k, h = p.W + k;
     let placed = false;
-    for (const b of bins) { const f = b.find(w, h, m.rotate); if (f) { b.place({ ...f, p }); placed = true; break; } }
+    for (const b of bins) { const f = b.find(w, h, m.rotate && !p.grain); if (f) { b.place({ ...f, p }); placed = true; break; } }
     if (!placed) {
-      const b = new Bin(SW + k, SH + k); const f = b.find(w, h, m.rotate);
+      const b = new Bin(SW + k, SH + k); const f = b.find(w, h, m.rotate && !p.grain);
       if (f) { b.place({ ...f, p }); bins.push(b); } else over.push(p);
     }
   }
@@ -1333,6 +1333,7 @@ function render() {
   if (V.view === 'invoice' && P()) { a.innerHTML = viewInvoice(); return; }
   if (V.view === 'letterhead') { a.innerHTML = viewLetterhead(); renderNav(); return; }
   if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
+  if (V.view === 'calc') { a.innerHTML = viewCalc(); return; }
   if (V.view === 'settings') a.innerHTML = viewSettings();
   else if (V.view === 'project' && P()) a.innerHTML = viewProject();
   else if (V.view === 'room' && R()) a.innerHTML = viewRoom();
@@ -1661,6 +1662,63 @@ function tabCut(r) {
   <h2>Cutting layouts</h2>
   ${packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i+1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm, trim ${x.m.trim} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('')}
   <p class="small muted">Sizes follow the build rules in Settings (board ${R_().t} mm, back ${R_().back} mm, kick ${R_().kick} mm, door gap ${R_().gap} mm). Check before cutting.</p>` : ''}`;
+}
+
+
+/* ============ quick board calculator (no rooms or walls) ============ */
+function CALC() { const c = S.settings.calc = S.settings.calc || { parts: [] }; c.parts = c.parts || []; return c; }
+function calcEdges(p) { const e = p.edge || ''; if (!e) return ''; const L = +p.eL || 0, W = +p.eW || 0; return [L > 0 ? e : '0', L > 1 ? e : '0', W > 0 ? e : '0', W > 1 ? e : '0'].join(','); }
+function calcParts() { return CALC().parts.filter(p => +p.L > 0 && +p.W > 0 && +p.qty > 0).map((p, i) => ({ ...p, L: +p.L, W: +p.W, qty: +p.qty, ref: '', name: p.name || ('Part ' + (i + 1)), edges: calcEdges(p) })); }
+function calcSet(i, k, v) { CALC().parts[i][k] = v; save(); render(); }
+function calcAdd() {
+  const g = id => $('#' + id), L = num(g('cqL').value), W = num(g('cqW').value);
+  if (!L || !W) { toast('Fill in the length and width.'); g(L ? 'cqW' : 'cqL').focus(); return; }
+  const last = CALC().parts.at(-1) || {};
+  CALC().parts.push({ id: uid(), name: g('cqN').value.trim(), L, W, qty: num(g('cqQ').value) || 1, matId: g('cqM').value, edge: g('cqE').value, eL: +g('cqEL').value, eW: +g('cqEW').value, grain: g('cqG').checked });
+  save(); render(); setTimeout(() => $('#cqN') && $('#cqN').focus(), 0);
+}
+function viewCalc() {
+  const c = CALC(), mats = S.settings.materials, edges = S.settings.edges || [], last = c.parts.at(-1) || {};
+  const matOpts = sel => mats.map(m => `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  const edgeOpts = sel => `<option value="">No edging</option>` + edges.map(e => `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  const cnt = (sel) => [0, 1, 2].map(n => `<option value="${n}" ${+sel === n ? 'selected' : ''}>${n}</option>`).join('');
+  const parts = calcParts(), packs = packAll(parts);
+  const boardCost = packs.reduce((a, x) => a + x.bins.length * (+x.m.price || 0), 0);
+  const edgeCost = edgeTotals(parts).reduce((a, e) => a + Math.ceil(e.buy) * e.price, 0);
+  const enter = `onkeydown="if(event.key==='Enter'){event.preventDefault();calcAdd()}"`;
+  return `${asBanner()}<h1>Board calculator</h1>
+  <p class="muted noprint" style="margin-top:-6px">Quick boards for shelves, panels and odd parts — no rooms or walls needed. Type the sizes, press <b>Enter</b> or <b>+ Add</b>, and the boards, edging and cutting layouts work out below.</p>
+  <div class="card noprint"><h3 style="margin-top:0">Add a part</h3><div class="row">
+    <div><label>Name</label><input id="cqN" placeholder="Shelf, side panel…" style="width:160px" ${enter}></div>
+    <div><label>Length (mm)</label><input id="cqL" type="number" ${enter}></div>
+    <div><label>Width (mm)</label><input id="cqW" type="number" ${enter}></div>
+    <div><label>Qty</label><input id="cqQ" type="number" value="1" style="width:70px" ${enter}></div>
+    <div><label>Board</label><select id="cqM">${matOpts(last.matId || S.settings.roles.carcass)}</select></div>
+    <div><label>Edging</label><select id="cqE">${edgeOpts(last.edge ?? '')}</select></div>
+    <div><label>Long edges</label><select id="cqEL">${cnt(last.eL ?? 1)}</select></div>
+    <div><label>Short edges</label><select id="cqEW">${cnt(last.eW ?? 0)}</select></div>
+    <div><label>Grain</label><label style="display:flex;gap:4px;align-items:center;color:var(--ink);font-size:14px;padding:6px 0"><input id="cqG" type="checkbox" ${last.grain ? 'checked' : ''}> keep along length</label></div>
+    <button class="primary" onclick="calcAdd()">+ Add</button></div>
+    <p class="small muted" style="margin-bottom:0">Boards and edging come from Settings → Board materials / Prices. Long edges run along the length.</p></div>
+  ${c.parts.length ? `<div class="card"><div class="row noprint" style="margin-bottom:6px"><b style="margin-right:auto">Parts (${c.parts.reduce((a, p) => a + (+p.qty || 0), 0)} pieces)</b>
+      <button class="small" onclick="window.print()">🖨 Print</button>
+      <button class="small danger" onclick="if(confirm('Clear all parts?')){CALC().parts=[];save();render()}">Clear all</button></div>
+    <div class="tablewrap"><table><tr><th>Name</th><th>Length</th><th>Width</th><th>Qty</th><th>Board</th><th>Edging</th><th>Long</th><th>Short</th><th>Grain</th><th class="noprint"></th></tr>
+    ${c.parts.map((p, i) => `<tr><td><input value="${esc(p.name || '')}" style="width:130px" onchange="calcSet(${i},'name',this.value)"></td>
+      ${['L', 'W', 'qty'].map(k => `<td><input type="number" value="${p[k]}" style="width:${k === 'qty' ? 60 : 80}px" onchange="calcSet(${i},'${k}',num(this.value)??0)"></td>`).join('')}
+      <td><select style="max-width:190px" onchange="calcSet(${i},'matId',this.value)">${matOpts(p.matId)}${mats.some(m => m.id === p.matId) ? '' : '<option selected>(missing)</option>'}</select></td>
+      <td><select style="max-width:170px" onchange="calcSet(${i},'edge',this.value)">${edgeOpts(p.edge)}</select></td>
+      <td><select onchange="calcSet(${i},'eL',+this.value)">${cnt(p.eL)}</select></td>
+      <td><select onchange="calcSet(${i},'eW',+this.value)">${cnt(p.eW)}</select></td>
+      <td><input type="checkbox" ${p.grain ? 'checked' : ''} onchange="calcSet(${i},'grain',this.checked)"></td>
+      <td class="noprint"><button class="small" title="Copy" onclick="CALC().parts.splice(${i + 1},0,{...CALC().parts[${i}],id:uid()});save();render()">⧉</button>
+        <button class="small danger" onclick="CALC().parts.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}
+    </table></div></div>` : `<p class="muted">No parts yet — add your first one above.</p>`}
+  ${parts.length ? `<h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(parts)}
+    ${boardCost || edgeCost ? `<div class="card"><b>Material cost:</b> boards R ${boardCost.toFixed(2)}${edgeCost ? ` + edging R ${edgeCost.toFixed(2)}` : ''} = <b>R ${(boardCost + edgeCost).toFixed(2)}</b></div>` : ''}
+    <h2>Cutting layouts</h2>
+    ${packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i + 1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm, trim ${x.m.trim} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('')}
+    <details><summary class="noprint" style="cursor:pointer;margin:6px 0">Show part drawings</summary>${partDrawings(parts.map(p => ({ ...p, g: 'Parts' })), 'g')}</details>` : ''}`;
 }
 
 /* ---------- settings ---------- */
