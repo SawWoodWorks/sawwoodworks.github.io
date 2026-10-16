@@ -125,16 +125,32 @@ const num = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
 const r0 = n => Math.round(n);
 const TERMS_VERSION = 2;
 
+/* Standard South African sheet sizes (PG Bison / Sonae Arauco / timber merchants). Editable in Settings → Board types. */
+const BOARD_TYPES = [
+  { name:'Melamine on chipboard', t:[12,16,18,22,25,32], sizes:['2750x1830','3660x1830'], rotate:true },
+  { name:'Melamine on MDF', t:[12,16,18,22,25,30], sizes:['2750x1830','3660x1830'], rotate:true },
+  { name:'Woodgrain melamine (grain)', t:[16,18,22], sizes:['2750x1830','3660x1830'], rotate:false },
+  { name:'High gloss / Supergloss', t:[16,18], sizes:['2750x1830'], rotate:true },
+  { name:'Chipboard (raw)', t:[9,12,16,18,22,25,32], sizes:['2750x1830','3660x1830'], rotate:true },
+  { name:'MDF / SupaWood (raw)', t:[3,4,6,9,12,16,18,22,25,30,32], sizes:['2750x1830','3660x1830'], rotate:true },
+  { name:'Moisture-resistant MDF', t:[12,16,18], sizes:['2750x1830'], rotate:true },
+  { name:'Veneered board', t:[16,18,22], sizes:['2750x1830','3660x1830'], rotate:false },
+  { name:'Plywood', t:[3,4,6,9,12,15,18,21,25], sizes:['2440x1220','2500x1250','3050x1525'], rotate:false },
+  { name:'Marine plywood', t:[6,9,12,15,18,25], sizes:['2440x1220','2500x1250'], rotate:false },
+  { name:'Shutterply', t:[18,21], sizes:['2440x1220'], rotate:true },
+  { name:'Hardboard / Masonite', t:[3,4,6], sizes:['2440x1220','2750x1830'], rotate:true },
+  { name:'Solid wood / laminated pine', t:[16,18,20,22,25,32,38], sizes:['2400x600','3000x600','2400x900'], rotate:false }
+];
 const DEF_SETTINGS = {
   user: '', agreed: null, provider: 'gemini', geminiKey: '', apiKey: '', model: '',
   rules: { t:16, back:3, baseH:720, baseD:560, kick:100, worktop:32, wallH:720, wallD:320, wallElev:1450,
            tallH:2100, tallD:560, railW:100, shelfSet:20, gap:3, slide:26, drawerClear:60 },
   roles: { carcass:'m1', doors:'m1', backs:'m2', edgeCarcass:'e1', edgeDoors:'e2' },
   edges: [ { id:'e1', name:'Edging 1mm (cupboard fronts)', price:0 }, { id:'e2', name:'Edging 2mm (doors & fronts)', price:0 } ],
-  hardware: [], labourRate: 0, markup: 0, edgeWaste: 10,
+  hardware: [], labourRate: 0, markup: 0, edgeWaste: 10, boardTypes: null,
   materials: [
-    { id:'m1', name:'White Melamine 16mm', L:2750, W:1830, kerf:4, trim:10, rotate:true },
-    { id:'m2', name:'Hardboard 3mm (backs & drawer bottoms)', L:2440, W:1220, kerf:4, trim:5, rotate:true }
+    { id:'m1', name:'White Melamine 16mm', type:'Melamine on chipboard', t:16, L:2750, W:1830, kerf:4, trim:10, rotate:true },
+    { id:'m2', name:'Hardboard 3mm (backs & drawer bottoms)', type:'Hardboard / Masonite', t:3, L:2440, W:1220, kerf:4, trim:5, rotate:true }
   ]
 };
 
@@ -1036,7 +1052,7 @@ function mergeSettings(s) {
   const d = JSON.parse(JSON.stringify(DEF_SETTINGS));
   if (!s) return d;
   return { ...d, ...s, rules:{ ...d.rules, ...(s.rules||{}) }, roles:{ ...d.roles, ...(s.roles||{}) },
-           materials: (s.materials && s.materials.length) ? s.materials : d.materials, edges: s.edges || d.edges, hardware: s.hardware || d.hardware };
+           materials: ((s.materials && s.materials.length) ? s.materials : d.materials).map(m => m.t ? m : { ...m, t: +((String(m.name).match(/(\d+(?:\.\d+)?)\s*mm/i) || [])[1]) || 0 }), edges: s.edges || d.edges, hardware: s.hardware || d.hardware };
 }
 
 const P = () => S.projects.find(p => p.id === V.pid);
@@ -1078,9 +1094,9 @@ function setShape(room, shape) {
 }
 
 /* ============ cupboard → parts ============ */
-function unitParts(u) {
+function unitParts(u, tc, tb) {
   if (u.type === 'tpl') return tplParts(u.tpl, +u.w, +u.h, +u.d).map(p => ({ name:p.name, L:p.L, W:p.W, qty:p.qty, role:'tpl', matId:p.matId, edges:p.edges }));
-  const Rl = R_(), t = Rl.t, out = [], zone = TYPES[u.type].zone;
+  const Rl = { ...R_() }, t = +tc || Rl.t, out = [], zone = TYPES[u.type].zone; if (+tb) Rl.back = +tb;
   const W = +u.w, H = +u.h, D = +u.d, iw = W - 2*t;
   const ec = S.settings.roles.edgeCarcass || '', ed = S.settings.roles.edgeDoors || '';
   const EDGE = { front: ec ? ec + ',0,0,0' : '', all: ed ? [ed, ed, ed, ed].join(',') : '', none:'' };
@@ -1113,7 +1129,7 @@ function roomParts(room) {
   const roles = roomMats(room), list = [];
   room.walls.forEach(w => w.units.forEach(u => {
     if (u.status === 'keep' || u.status === 'ask') return;
-    unitParts(u).forEach(p => list.push({ ...p, ref: unitRef(w, u), matId: p.matId || roles[p.role] }));
+    unitParts(u, (mat(roles.carcass) || {}).t, (mat(roles.backs) || {}).t).forEach(p => list.push({ ...p, ref: unitRef(w, u), matId: p.matId || roles[p.role] }));
   }));
   (room.parts || []).forEach(p => { if (+p.L > 0 && +p.W > 0 && +p.qty > 0) list.push({ name:p.name, L:r0(+p.L), W:r0(+p.W), qty:+p.qty, role:'carcass', ref:p.set || 'Loose parts', matId:p.matId, edges:p.edges }); });
   return list;
@@ -1674,6 +1690,7 @@ function calcAdd() {
   const g = id => $('#' + id), L = num(g('cqL').value), W = num(g('cqW').value);
   if (!L || !W) { toast('Fill in the length and width.'); g(L ? 'cqW' : 'cqL').focus(); return; }
   const last = CALC().parts.at(-1) || {};
+  V.cqMat = null;
   CALC().parts.push({ id: uid(), name: g('cqN').value.trim(), L, W, qty: num(g('cqQ').value) || 1, matId: g('cqM').value, edge: g('cqE').value, eL: +g('cqEL').value, eW: +g('cqEW').value, grain: g('cqG').checked });
   save(); render(); setTimeout(() => $('#cqN') && $('#cqN').focus(), 0);
 }
@@ -1693,7 +1710,7 @@ function viewCalc() {
     <div><label>Length (mm)</label><input id="cqL" type="number" ${enter}></div>
     <div><label>Width (mm)</label><input id="cqW" type="number" ${enter}></div>
     <div><label>Qty</label><input id="cqQ" type="number" value="1" style="width:70px" ${enter}></div>
-    <div><label>Board</label><select id="cqM">${matOpts(last.matId || S.settings.roles.carcass)}</select></div>
+    <div><label>Board</label><div style="display:flex;gap:4px"><select id="cqM" style="max-width:260px">${matOpts(V.cqMat || last.matId || S.settings.roles.carcass)}</select><button type="button" title="Add a board size / thickness" onclick="openBoardPicker('calc')">+ New board</button></div></div>
     <div><label>Edging</label><select id="cqE">${edgeOpts(last.edge ?? '')}</select></div>
     <div><label>Long edges</label><select id="cqEL">${cnt(last.eL ?? 1)}</select></div>
     <div><label>Short edges</label><select id="cqEW">${cnt(last.eW ?? 0)}</select></div>
@@ -1721,6 +1738,66 @@ function viewCalc() {
     <details><summary class="noprint" style="cursor:pointer;margin:6px 0">Show part drawings</summary>${partDrawings(parts.map(p => ({ ...p, g: 'Parts' })), 'g')}</details>` : ''}`;
 }
 
+
+/* ---- board types & the "add a board" picker ---- */
+function boardTypes() { return S.settings.boardTypes || BOARD_TYPES; }
+function editBoardTypes() { if (!S.settings.boardTypes) S.settings.boardTypes = JSON.parse(JSON.stringify(BOARD_TYPES)); return S.settings.boardTypes; }
+const parseNums = v => String(v).split(/[,;\s]+/).map(x => +x.replace(',', '.')).filter(x => x > 0);
+const parseSizes = v => String(v).split(/[,;]+/).map(x => x.trim().toLowerCase().replace(/\s/g, '').replace('×', 'x')).filter(x => /^\d+x\d+$/.test(x));
+function openBoardPicker(forWhat) {
+  const t0 = boardTypes()[0];
+  V.bp = { for: forWhat || '', type: 0, t: t0.t.includes(16) ? 16 : t0.t[0], size: t0.sizes[0], L: '', W: '', tc: '', colour: '', price: '' };
+  bpRender();
+}
+function bpSet(k, v) {
+  const b = V.bp; b[k] = v;
+  if (k === 'type') { const ty = boardTypes()[+v] || {}; if (!(ty.t || []).includes(+b.t)) b.t = (ty.t || [])[0] || 'custom'; if (!(ty.sizes || []).includes(b.size)) b.size = (ty.sizes || [])[0] || 'custom'; }
+  bpRender();
+}
+function bpRender() {
+  const b = V.bp, types = boardTypes(), ty = types[+b.type] || types[0];
+  modal(`<h3 style="margin-top:0">Add a board</h3>
+    <div class="row">
+      <div><label>Type</label><select onchange="bpSet('type',this.value)">${types.map((x, i) => `<option value="${i}" ${+b.type === i ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>
+      <div><label>Thickness</label><select onchange="bpSet('t',this.value)">${ty.t.map(t => `<option value="${t}" ${+b.t === t ? 'selected' : ''}>${t} mm</option>`).join('')}<option value="custom" ${b.t === 'custom' ? 'selected' : ''}>Other…</option></select></div>
+      ${b.t === 'custom' ? `<div><label>Thickness (mm)</label><input type="number" style="width:80px" value="${esc(b.tc)}" oninput="V.bp.tc=this.value"></div>` : ''}
+      <div><label>Sheet size (mm)</label><select onchange="bpSet('size',this.value)">${ty.sizes.map(z => `<option value="${z}" ${b.size === z ? 'selected' : ''}>${z.replace('x', ' × ')}${/^3660|^3050/.test(z) ? ' (long)' : ''}</option>`).join('')}<option value="custom" ${b.size === 'custom' ? 'selected' : ''}>Other size…</option></select></div>
+      ${b.size === 'custom' ? `<div><label>Length</label><input type="number" style="width:90px" value="${esc(b.L)}" oninput="V.bp.L=this.value"></div><div><label>Width</label><input type="number" style="width:90px" value="${esc(b.W)}" oninput="V.bp.W=this.value"></div>` : ''}
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:1;min-width:200px"><label>Colour / name (optional)</label><input style="width:100%" placeholder="e.g. White, Grey Fleece, Pine, Birch" value="${esc(b.colour)}" oninput="V.bp.colour=this.value"></div>
+      <div><label>Price per sheet (R)</label><input type="number" style="width:110px" value="${esc(b.price)}" oninput="V.bp.price=this.value"></div>
+    </div>
+    <p class="small muted">${ty.rotate ? 'Parts may be turned on this board to save waste.' : 'Grain board — parts keep their grain along the sheet length.'} Add more types, thicknesses or sizes under Settings → Board types.</p>
+    <div class="row"><button class="primary" onclick="bpAdd()">+ Add board</button><button onclick="modal('')">Cancel</button></div>`);
+}
+function bpAdd() {
+  const b = V.bp, ty = boardTypes()[+b.type];
+  const t = b.t === 'custom' ? +b.tc : +b.t;
+  let L, W; if (b.size === 'custom') { L = +b.L; W = +b.W; } else [L, W] = b.size.split('x').map(Number);
+  if (!t || !L || !W) { toast('Fill in the thickness and sheet size.'); return; }
+  if (W > L) [L, W] = [W, L];
+  const name = `${b.colour.trim() ? b.colour.trim() + ' ' : ''}${ty.name.replace(/\s*\(grain\)/, '')} ${t}mm${(L !== 2750 || W !== 1830) ? ` ${L}×${W}` : ''}`;
+  const same = S.settings.materials.find(m => m.name === name && m.L === L && m.W === W);
+  let id = same && same.id;
+  if (!same) { id = uid(); S.settings.materials.push({ id, name, type: ty.name, t, L, W, kerf: 4, trim: 10, rotate: !!ty.rotate, price: +b.price || 0 }); }
+  if (b.for === 'calc') V.cqMat = id;
+  save(); modal(''); toast(same ? 'That board is already in your list — selected it.' : 'Board added: ' + name); render();
+}
+function boardTypesCard() {
+  const types = boardTypes();
+  return `<div class="card"><h3 style="margin-top:0">Board types, thicknesses &amp; sheet sizes</h3>
+    <p class="small muted">What the "Add a board" list offers. Separate thicknesses and sizes with commas (sizes as length x width, e.g. 3660x1830). Untick "Can turn" for boards with grain.</p>
+    <div class="tablewrap"><table><tr><th>Type</th><th>Thicknesses (mm)</th><th>Sheet sizes (mm)</th><th>Can turn</th><th></th></tr>
+    ${types.map((x, i) => `<tr><td><input value="${esc(x.name)}" style="width:210px" onchange="editBoardTypes()[${i}].name=this.value;save()"></td>
+      <td><input value="${esc(x.t.join(', '))}" style="width:200px" onchange="editBoardTypes()[${i}].t=parseNums(this.value);save();render()"></td>
+      <td><input value="${esc(x.sizes.join(', '))}" style="width:240px" onchange="editBoardTypes()[${i}].sizes=parseSizes(this.value);save();render()"></td>
+      <td><input type="checkbox" ${x.rotate ? 'checked' : ''} onchange="editBoardTypes()[${i}].rotate=this.checked;save()"></td>
+      <td><button class="small danger" onclick="editBoardTypes().splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table></div>
+    <div class="row" style="margin-top:8px"><button class="small" onclick="editBoardTypes().push({name:'New type',t:[16,18],sizes:['2750x1830'],rotate:true});save();render()">+ Add type</button>
+      <button class="small" onclick="if(confirm('Put back the standard board types?')){S.settings.boardTypes=null;save();render()}">Reset to standard</button></div></div>`;
+}
+
 /* ---------- settings ---------- */
 function viewSettings() {
   const s = S.settings, Rl = s.rules;
@@ -1731,13 +1808,16 @@ function viewSettings() {
     <div class="row" style="margin-top:8px">${rule('baseH','Base carcass height')}${rule('baseD','Base depth')}${rule('wallH','Wall unit height')}${rule('wallD','Wall unit depth')}${rule('wallElev','Wall unit height off floor')}${rule('tallH','Tall carcass height')}${rule('tallD','Tall depth')}</div>
     <div class="row" style="margin-top:8px">${rule('slide','Drawer runner clearance (total)')}${rule('drawerClear','Drawer box below front')}</div>
     <div style="margin-top:8px"><button class="small" onclick="if(confirm('Reset build rules to defaults?')){S.settings.rules=JSON.parse(JSON.stringify(DEF_SETTINGS.rules));save();render()}">Reset to defaults</button></div></div>
-  <div class="card"><h3 style="margin-top:0">Board materials</h3><div class="tablewrap"><table><tr><th>Name</th><th>Length</th><th>Width</th><th>Saw kerf</th><th>Edge trim</th><th>Can rotate</th><th></th></tr>
+  <div class="card"><h3 style="margin-top:0">Board materials</h3><div class="tablewrap"><table><tr><th>Name</th><th>Thickness</th><th>Length</th><th>Width</th><th>Saw kerf</th><th>Edge trim</th><th>Can rotate</th><th></th></tr>
     ${s.materials.map((m, i) => `<tr><td><input value="${esc(m.name)}" style="width:240px" onchange="S.settings.materials[${i}].name=this.value;save()"></td>
-      ${['L','W','kerf','trim'].map(f => `<td><input type="number" value="${m[f]}" onchange="S.settings.materials[${i}]['${f}']=num(this.value)??0;save()"></td>`).join('')}
+      ${['t','L','W','kerf','trim'].map(f => `<td><input type="number" value="${m[f]}" onchange="S.settings.materials[${i}]['${f}']=num(this.value)??0;save()"></td>`).join('')}
       <td><input type="checkbox" ${m.rotate?'checked':''} onchange="S.settings.materials[${i}].rotate=this.checked;save()"></td>
       <td><button class="small danger" onclick="delMat(${i})">✕</button></td></tr>`).join('')}</table></div>
-    <button class="small" style="margin-top:8px" onclick="S.settings.materials.push({id:uid(),name:'New board',L:2750,W:1830,kerf:4,trim:10,rotate:true});save();render()">+ Add material</button>
+    <div class="row" style="margin-top:8px"><button class="small primary" onclick="openBoardPicker()">+ Add board (type, thickness, size)</button>
+    <button class="small" onclick="S.settings.materials.push({id:uid(),name:'New board',t:16,L:2750,W:1830,kerf:4,trim:10,rotate:true});save();render()">+ Add blank row</button></div>
+    <p class="small muted" style="margin-bottom:0">Cupboards use the thickness of the carcass and backs boards you pick for each room.</p>
     <div class="row" style="margin-top:10px">${['carcass','doors','backs'].map(role => `<div><label>Default ${role === 'backs' ? 'backs' : role} board</label><select onchange="S.settings.roles['${role}']=this.value;save()">${s.materials.map(m => `<option value="${m.id}" ${s.roles[role]===m.id?'selected':''}>${esc(m.name)}</option>`).join('')}</select></div>`).join('')}</div></div>
+  ${boardTypesCard()}
   ${CLOUD ? aiCompanyCard() : `<div class="card"><h3 style="margin-top:0">AI photo reading</h3>
     <div class="row"><div><label>AI service</label><select onchange="S.settings.provider=this.value;S.settings.model='';save();render()">
       <option value="gemini" ${s.provider!=='anthropic'?'selected':''}>Google Gemini — free</option>
