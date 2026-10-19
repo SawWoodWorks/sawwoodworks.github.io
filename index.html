@@ -1483,6 +1483,27 @@ function saveCompanyKey(v) {
 }
 function apiHeaders() { return { 'content-type':'application/json', 'x-api-key':S.settings.apiKey.trim(), 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' }; }
 const gHeaders = () => ({ 'content-type':'application/json', 'x-goog-api-key': aiKey() });
+/* Google's newer "AQ." keys are not accepted the same way on every account, so try the key header, then ?key=, then as a Bearer token. */
+let GMODE = 0;
+async function gFetch(url, body) {
+  const key = aiKey(), modes = [GMODE, 0, 1, 2].filter((m, i, a) => a.indexOf(m) === i);
+  let last;
+  for (const m of modes) {
+    const h = { 'content-type': 'application/json' };
+    if (m === 0) h['x-goog-api-key'] = key; else if (m === 2) h.Authorization = 'Bearer ' + key;
+    const u = m === 1 ? url + (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key) : url;
+    const r = await fetch(u, body ? { method: 'POST', headers: h, body } : { headers: h });
+    if (r.status !== 401 && r.status !== 403) { GMODE = m; return r; }
+    last = r;
+  }
+  return last;
+}
+function gErr(j, status) {
+  const m = (j && j.error && j.error.message) || ('HTTP ' + status);
+  if (status === 429) return 'free daily limit reached — try again later';
+  if (/unregistered callers|ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|OAuth 2/i.test(m)) return 'Google did not accept this AI key. Keys starting with "AQ." often don\'t work — make a key starting with "AIza" instead (Google Cloud console → APIs & Services → Credentials → Create credentials → API key, on the same project) and paste it in Settings → AI photo reading.';
+  return m;
+}
 async function pickModel(force) {
   if (aiModel() && !force) return aiModel();
   let m;
@@ -1492,8 +1513,8 @@ async function pickModel(force) {
     const ids = (j.data || []).map(x => x.id);
     m = ids.find(i => /sonnet/i.test(i)) || ids[0];
   } else {
-    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: gHeaders() });
-    const j = await r.json(); if (!r.ok) throw new Error(j.error?.message || ('HTTP ' + r.status));
+    const r = await gFetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200');
+    const j = await r.json(); if (!r.ok) throw new Error(gErr(j, r.status));
     const ok = (j.models || []).filter(x => (x.supportedGenerationMethods || []).includes('generateContent'))
       .map(x => x.name.replace('models/', ''))
       .filter(n => /^gemini-[\d.]+-flash/.test(n) && !/image|tts|live|audio|thinking|exp|lite/.test(n));
@@ -1526,11 +1547,11 @@ Reply with ONLY JSON, no other text, in this shape:
       const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
       txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
     } else {
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method:'POST', headers: gHeaders(),
-        body: JSON.stringify({ contents:[{ role:'user', parts:[...photos.map(data => ({ inline_data:{ mime_type:'image/jpeg', data } })), { text:prompt }] }],
-                               generationConfig:{ responseMimeType:'application/json', temperature:0.2 } }) });
+      const resp = await gFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        JSON.stringify({ contents:[{ role:'user', parts:[...photos.map(data => ({ inline_data:{ mime_type:'image/jpeg', data } })), { text:prompt }] }],
+                               generationConfig:{ responseMimeType:'application/json', temperature:0.2 } }));
       const j = await resp.json();
-      if (!resp.ok) throw new Error(resp.status === 429 ? 'free daily limit reached — try again later' : (j.error?.message || ('HTTP ' + resp.status)));
+      if (!resp.ok) throw new Error(gErr(j, resp.status));
       txt = ((j.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
     }
     const js = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
@@ -1911,9 +1932,9 @@ Reply with ONLY JSON:
       const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
       txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
     } else {
-      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: gHeaders(),
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [...data.map(d => ({ inline_data: { mime_type: 'image/jpeg', data: d } })), { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }) });
-      const j = await resp.json(); if (!resp.ok) throw new Error(resp.status === 429 ? 'free daily limit reached — try again later' : (j.error?.message || ('HTTP ' + resp.status)));
+      const resp = await gFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        JSON.stringify({ contents: [{ role: 'user', parts: [...data.map(d => ({ inline_data: { mime_type: 'image/jpeg', data: d } })), { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }));
+      const j = await resp.json(); if (!resp.ok) throw new Error(gErr(j, resp.status));
       txt = ((j.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
     }
     applyDrawingAI(it, JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)));
