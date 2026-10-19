@@ -524,8 +524,8 @@ function renderHeader() {
 function renderNav() {
   const nav = document.querySelector('header nav'); if (!nav) return;
   if (CLOUD && (!ME || !ME.role)) { nav.innerHTML = ''; return; }
-  const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v ? 'class="on"' : ''}>${l}</button>`;
-  nav.innerHTML = b('projects', 'Projects') + b('calc', 'Board calculator') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
+  const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v || (v === 'items' && V.view === 'item') ? 'class="on"' : ''}>${l}</button>`;
+  nav.innerHTML = b('projects', 'Projects') + b('calc', 'Board calculator') + b('items', 'Drawings') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
 }
 
 /* ---- account card in Settings ---- */
@@ -1350,6 +1350,8 @@ function render() {
   if (V.view === 'letterhead') { a.innerHTML = viewLetterhead(); renderNav(); return; }
   if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
   if (V.view === 'calc') { a.innerHTML = viewCalc(); return; }
+  if (V.view === 'items') { a.innerHTML = viewItems(); return; }
+  if (V.view === 'item') { a.innerHTML = viewItem(); return; }
   if (V.view === 'settings') a.innerHTML = viewSettings();
   else if (V.view === 'project' && P()) a.innerHTML = viewProject();
   else if (V.view === 'room' && R()) a.innerHTML = viewRoom();
@@ -1414,7 +1416,7 @@ function boardsSummary(packs) {
   return `<div class="card"><table><tr><th>Material</th><th>Sheet size</th><th>Parts</th><th>Boards needed</th><th>Usage</th></tr>
   ${packs.map(x => `<tr><td>${esc(x.m.name)}</td><td>${x.m.L} × ${x.m.W}</td><td>${x.parts.reduce((a,p)=>a+p.qty,0)}</td>
     <td class="big" style="font-size:20px">${x.bins.length}</td><td>${r0(x.usage*100)}%</td></tr>
-    ${x.over.length ? `<tr><td colspan="5"><div class="msg bad">${x.over.length} part(s) are bigger than a ${esc(x.m.name)} sheet: ${x.over.map(p=>esc(p.ref+' '+p.name+' '+p.L+'×'+p.W)).join(', ')}</div></td></tr>` : ''}`).join('')}
+    ${x.over.length ? `<tr><td colspan="5"><div class="msg bad">${x.over.length} part(s) are bigger than a ${esc(x.m.name)} sheet: ${x.over.map(p=>esc((p.ref ? p.ref+' ' : '')+p.name+' '+p.L+'×'+p.W)).join(', ')}${x.over.some(p => Math.max(p.L,p.W) <= x.m.L - 2*(+x.m.trim||0) && Math.min(p.L,p.W) <= x.m.W - 2*(+x.m.trim||0)) ? ' — it would fit turned the other way: swap its length and width, untick Grain, or tick "Can rotate" for this board.' : ' — pick a bigger sheet (e.g. 3660 × 1830).'}</div></td></tr>` : ''}`).join('')}
   </table></div>`;
 }
 
@@ -1796,6 +1798,226 @@ function boardTypesCard() {
       <td><button class="small danger" onclick="editBoardTypes().splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table></div>
     <div class="row" style="margin-top:8px"><button class="small" onclick="editBoardTypes().push({name:'New type',t:[16,18],sizes:['2750x1830'],rotate:true});save();render()">+ Add type</button>
       <button class="small" onclick="if(confirm('Put back the standard board types?')){S.settings.boardTypes=null;save();render()}">Reset to standard</button></div></div>`;
+}
+
+
+/* ============ Drawings: bring in a design drawing, change the sizes, get the cutting list ============ */
+function ITEMS() { return S.settings.items = S.settings.items || []; }
+const IT = () => ITEMS().find(x => x.id === V.item);
+/* size formulas: numbers, + - * / ( ) and the size letters of the item, e.g. "W-2*S-6" */
+function fEval(expr, params) {
+  const s = String(expr ?? '').trim(); if (s === '') return 0;
+  if (!/^[\d\s.+\-*/()A-Za-z_]+$/.test(s)) return NaN;
+  const vals = {}; (params || []).forEach(p => { if (p.k) vals[p.k] = +p.v || 0; });
+  let bad = false;
+  const js = s.replace(/[A-Za-z_][A-Za-z_0-9]*/g, n => { if (n in vals) return '(' + vals[n] + ')'; bad = true; return '0'; });
+  if (bad) return NaN;
+  try { const v = Function('"use strict";return (' + js + ')')(); return isFinite(v) ? Math.round(v * 10) / 10 : NaN; } catch (e) { return NaN; }
+}
+function itemParts(it) {
+  return (it.parts || []).map((p, i) => {
+    const L = fEval(p.L, it.params), W = fEval(p.W, it.params), qty = fEval(p.qty, it.params);
+    return { ...p, i, L: r0(L), W: r0(W), qty: r0(qty), bad: !(L > 0) || !(W > 0) || !(qty > 0), ref: '', name: p.name || ('Part ' + (i + 1)), edges: calcEdges(p) };
+  });
+}
+function itemFile(x) { return typeof x === 'string' && x.startsWith('ph:') ? PHOTOS[x.slice(3)] : x; }
+async function loadItemFiles(it) {
+  if (!CLOUD) return; const need = (it.files || []).filter(x => x.startsWith('ph:') && !PHOTOS[x.slice(3)]); if (!need.length) return;
+  await Promise.all(need.map(x => FB.F.getDoc(FB.F.doc(FB.db, cpath('photos', x.slice(3)))).then(d => { if (d.exists()) PHOTOS[x.slice(3)] = d.data().data; }).catch(() => {})));
+  if (V.view === 'item' || V.view === 'items') softRender();
+}
+async function storeItemFile(it, dataUrl) {
+  if (!CLOUD) { it.files.push(dataUrl); return; }
+  const id = uid() + uid(); PHOTOS[id] = dataUrl; it.files.push('ph:' + id);
+  await FB.F.setDoc(FB.F.doc(FB.db, cpath('photos', id)), { pid: 'item:' + it.id, data: dataUrl, at: new Date().toISOString() });
+}
+function dropItemFiles(it) { (it.files || []).forEach(x => { if (CLOUD && x.startsWith('ph:')) FB.F.deleteDoc(FB.F.doc(FB.db, cpath('photos', x.slice(3)))).catch(() => {}); }); }
+/* PDF → page pictures (pdf.js, loaded only when needed) */
+async function pdfToImages(file, maxPages = 3) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise, out = [];
+  for (let n = 1; n <= Math.min(pdf.numPages, maxPages); n++) {
+    const pg = await pdf.getPage(n), v0 = pg.getViewport({ scale: 1 }), sc = Math.min(3, 1700 / Math.max(v0.width, v0.height)), vp = pg.getViewport({ scale: sc });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height; const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await pg.render({ canvasContext: ctx, viewport: vp }).promise; out.push(c.toDataURL('image/jpeg', 0.78));
+  }
+  return out;
+}
+function imgToJpeg(file, max = 1700) { return new Promise(res => { const fr = new FileReader(); fr.onload = () => { const img = new Image(); img.onload = () => { const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = r0(img.width * s); c.height = r0(img.height * s); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.78)); }; img.onerror = () => res(null); img.src = fr.result; }; fr.readAsDataURL(file); }); }
+/* find or add a board for "17mm white oak veneer chipboard" etc. */
+function matFor(desc, t) {
+  desc = String(desc || ''); t = +t || +((desc.match(/(\d+)\s*mm/i) || [])[1]) || 16;
+  const d = desc.toLowerCase(), words = d.split(/[^a-z]+/).filter(w => w.length > 2 && !['mm', 'the', 'and', 'board'].includes(w));
+  const type = /ply/.test(d) ? 'Plywood' : /ven|v\/n|oak|ash|walnut/.test(d) ? 'Veneered board' : /supa|mdf/.test(d) ? 'MDF / SupaWood (raw)' : /mela|white|grey|black/.test(d) ? 'Melamine on chipboard' : /hard|masonite/.test(d) ? 'Hardboard / Masonite' : 'Chipboard (raw)';
+  const same = S.settings.materials.filter(m => +m.t === t);
+  let best = same.find(m => m.type === type && words.every(w => m.name.toLowerCase().includes(w)))
+    || same.find(m => m.type === type) || same.find(m => words.some(w => m.name.toLowerCase().includes(w)));
+  if (best) return best.id;
+  const bt = boardTypes().find(x => x.name === type) || {}, sz = (bt.sizes || ['2750x1830'])[0].split('x').map(Number);
+  const nice = desc.replace(/\b\d+\s*mm\b/i, '').replace(/\s+/g, ' ').trim();
+  const id = uid(); S.settings.materials.push({ id, name: `${nice ? nice.charAt(0).toUpperCase() + nice.slice(1) : type} ${t}mm`, type, t, L: sz[0], W: sz[1], kerf: 4, trim: 10, rotate: bt.rotate !== false && type !== 'Veneered board', price: 0 });
+  return id;
+}
+function exampleHeadboard() {
+  const v = matFor('White oak veneer chipboard (single face)', 17), s30 = matFor('SupaWood', 30), s16 = matFor('SupaWood', 16), c16 = matFor('Chipboard', 16);
+  const P = (name, qty, L, W, matId, grain) => ({ id: uid(), name, qty: String(qty), L, W, matId, edge: '', eL: 0, eW: 0, grain: !!grain });
+  return { id: uid(), name: 'Headboard – 3 panels (example)', notes: 'Made up in 3 panels. 120×16 joint cleats at the back, dry-fixed on the centre panel. Veneer grain runs along the sheet length (the first size). Change the sizes — every part follows.',
+    params: [{ k: 'W', label: 'Overall width', v: 3416 }, { k: 'H', label: 'Overall height', v: 1315 }, { k: 'S', label: 'Side panel width', v: 700 }, { k: 'G', label: 'Gap between panels', v: 3 }, { k: 'D', label: 'Return / frame depth', v: 53 }],
+    parts: [
+      P('Centre panel', 1, 'W-2*S-2*G', 'H', v, true), P('Side panel', 2, 'S', 'H', v, true),
+      P('Top (centre)', 1, 'W-2*S-2*G', 'D', v, true), P('Top (sides)', 2, 'S+G-17', 'D', v, true), P('Block', 2, '50', 'D', v, true),
+      P('Cleat (centre)', 1, 'W-2*S-2*G', '40', s30), P('Cleat (sides)', 2, 'S+G-17', '40', s30),
+      P('Side return', 2, 'H', 'D', s16), P('Joint cleat', 2, 'H-115', '120', s16),
+      P('Bottom cleat (centre)', 1, 'W-2*S-2*G', 'D', c16), P('Bottom cleat (sides)', 2, 'S+G-17', 'D', c16)],
+    files: [], created: new Date().toISOString() };
+}
+function newItem(kind) {
+  const it = kind === 'example' ? exampleHeadboard() : { id: uid(), name: 'New item', notes: '', params: [{ k: 'W', label: 'Width', v: 1000 }, { k: 'H', label: 'Height', v: 720 }, { k: 'D', label: 'Depth', v: 560 }], parts: [], files: [], created: new Date().toISOString() };
+  ITEMS().unshift(it); save(); go('item', { item: it.id });
+}
+async function importDrawing(files) {
+  files = [...(files || [])]; if (!files.length) return;
+  const it = { id: uid(), name: files[0].name.replace(/\.[^.]+$/, ''), notes: '', params: [], parts: [], files: [], created: new Date().toISOString() };
+  V.busy = true; V.itMsg = ''; render(); toast('Reading the drawing…');
+  try {
+    const imgs = [];
+    for (const f of files) { if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) imgs.push(...await pdfToImages(f)); else { const d = await imgToJpeg(f); if (d) imgs.push(d); } }
+    if (!imgs.length) throw new Error('could not open the file');
+    ITEMS().unshift(it);
+    for (const d of imgs) await storeItemFile(it, d);
+    save(); V.item = it.id; V.view = 'item';
+    if (aiKey()) await aiReadDrawing(it, imgs);
+    else V.itMsg = CLOUD && !isRoot() ? 'Drawing saved. AI reading is not switched on yet (ask the administrator) — add the sizes and parts by hand below.' : 'Drawing saved. Add the AI key in Settings to have the sizes and cutting list read for you — or add them by hand below.';
+  } catch (e) { V.itMsg = 'Could not bring in the drawing: ' + e.message; }
+  V.busy = false; save(); render();
+}
+async function aiReadDrawing(it, imgs) {
+  imgs = imgs || (it.files || []).map(itemFile).filter(Boolean);
+  if (!imgs.length) { V.itMsg = 'No drawing to read.'; return; }
+  const prompt = `You are reading a cabinet maker's / shopfitter's design drawing (often hand drawn and scanned). Turn it into a PARAMETRIC cutting list so the sizes can be changed later.
+1. Find the main overall sizes as parameters with short letter keys (W = overall width/length, H = height, D = depth, plus others such as S = side panel width, G = gap, T = board thickness) and their values in mm.
+2. List every part. If the drawing has a cutting list, use it (include crossed-out lines only if they are not crossed out). Otherwise work the parts out from the drawing.
+3. Write each part's length and width as a formula in the parameter letters whenever the size follows from the overall sizes (e.g. "H", "W-2*S-2*G", "S+G-17"), otherwise as a plain number. qty can be a number or formula.
+4. Give each part's board thickness in mm and the material in words (e.g. "white oak veneer chipboard single face", "SupaWood", "chipboard", "plywood"), and edging if shown.
+Check: every formula with the given parameter values must give the size written on the drawing.
+Reply with ONLY JSON:
+{"name":"short item name e.g. Headboard","job":"job name if written","params":[{"k":"W","label":"Overall width","v":3416}],"parts":[{"name":"Centre panel","qty":"1","L":"H","W":"W-2*S-2*G","t":17,"material":"white oak veneer chipboard","grain":true,"edging":"","notes":""}],"notes":"anything to check"}`;
+  try {
+    const model = await pickModel(); let txt = '';
+    const data = imgs.slice(0, 4).map(d => d.split(',')[1]);
+    if (aiProvider() === 'anthropic') {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ model, max_tokens: 4000, messages: [{ role: 'user', content: [...data.map(d => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: d } })), { type: 'text', text: prompt }] }] }) });
+      const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
+      txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('');
+    } else {
+      const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: 'POST', headers: gHeaders(),
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [...data.map(d => ({ inline_data: { mime_type: 'image/jpeg', data: d } })), { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }) });
+      const j = await resp.json(); if (!resp.ok) throw new Error(resp.status === 429 ? 'free daily limit reached — try again later' : (j.error?.message || ('HTTP ' + resp.status)));
+      txt = ((j.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+    }
+    applyDrawingAI(it, JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1)));
+    V.itMsg = `✔ Read ${it.parts.length} part(s) and ${it.params.length} size(s) from the drawing. Check them against the drawing, then change the sizes as you like.`;
+  } catch (e) { V.itMsg = 'AI could not read the drawing: ' + e.message + ' — add the sizes and parts by hand below.'; }
+}
+function applyDrawingAI(it, js) {
+  if (js.name) it.name = String(js.name).slice(0, 80) + (js.job ? ' – ' + String(js.job).slice(0, 60) : '');
+  it.params = (js.params || []).filter(p => p && p.k).map(p => ({ k: String(p.k).replace(/[^A-Za-z_0-9]/g, '').slice(0, 12) || 'X', label: String(p.label || p.k).slice(0, 60), v: +p.v || 0 }));
+  it.parts = (js.parts || []).map(p => {
+    const e = String(p.edging || ''), m = e.match(/(\d)\s*x\s*long|(\d)\s*long/i);
+    return { id: uid(), name: String(p.name || 'Part').slice(0, 60), qty: String(p.qty ?? 1), L: String(p.L ?? ''), W: String(p.W ?? ''), matId: matFor(p.material, p.t), edge: '', eL: 0, eW: 0, grain: !!p.grain, note: [p.edging, p.notes].filter(Boolean).join(' · ').slice(0, 120) };
+  });
+  if (js.notes) it.notes = String(js.notes).slice(0, 600);
+  // a grain board that only fits the sheet the other way round: swap length and width so it can be cut
+  it.parts.forEach(pt => { const m = mat(pt.matId); if (!m) return; const L = fEval(pt.L, it.params), W = fEval(pt.W, it.params), SL = m.L - 2 * (+m.trim || 0), SW = m.W - 2 * (+m.trim || 0);
+    if ((!m.rotate || pt.grain) && !(L <= SL && W <= SW) && W <= SL && L <= SW) { [pt.L, pt.W] = [pt.W, pt.L]; pt.note = ((pt.note ? pt.note + ' · ' : '') + 'length/width swapped to fit the grain along the sheet').slice(0, 160); } });
+}
+function itemSet(path, v, re = true) { const it = IT(); const ks = path.split('.'); let o = it; ks.slice(0, -1).forEach(k => o = o[k]); o[ks.at(-1)] = v; save(); if (re) render(); }
+function viewItems() {
+  const list = ITEMS(); list.forEach(loadItemFiles);
+  return `${asBanner()}<h1>Drawings</h1>
+  <p class="muted" style="margin-top:-6px">Bring in a design drawing (photo or PDF scan). The app reads the sizes and cutting list into an item you can resize — change the overall sizes and every part, the boards and the cutting layouts follow.</p>
+  <div class="card noprint"><div class="row">
+    <label class="btn primary" style="color:#fff;background:var(--accent);border-color:var(--accent)">📄 Bring in a drawing (photo / PDF)<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="importDrawing(this.files)"></label>
+    <button onclick="newItem()">+ Blank item</button><button onclick="newItem('example')">+ Example: 3-panel headboard</button></div>
+    ${V.busy ? '<p><span class="spinner"></span> Reading the drawing — this can take up to a minute…</p>' : ''}${V.itMsg && V.view === 'items' ? `<div class="msg ai small">${esc(V.itMsg)}</div>` : ''}</div>
+  ${list.length ? `<div class="grid">${list.map(it => { const f = itemFile((it.files || [])[0]); return `<div class="card" style="cursor:pointer" onclick="go('item',{item:'${it.id}'})">
+      ${f ? `<img src="${f}" alt="" style="width:100%;height:150px;object-fit:cover;object-position:top;border-radius:6px;background:#fff">` : ''}
+      <b>${esc(it.name)}</b><div class="small muted">${(it.parts || []).length} part line(s) · ${(it.params || []).map(p => esc(p.k) + ' ' + p.v).join(' · ')}</div></div>`; }).join('')}</div>` : '<p class="muted">No drawings yet.</p>'}`;
+}
+function viewItem() {
+  const it = IT(); if (!it) { V.view = 'items'; return viewItems(); }
+  loadItemFiles(it);
+  const mats = S.settings.materials, edges = S.settings.edges || [], parts = itemParts(it), good = parts.filter(p => !p.bad), packs = packAll(good);
+  const matOpts = sel => mats.map(m => `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('') + (mats.some(m => m.id === sel) ? '' : '<option selected>(choose)</option>');
+  const edgeOpts = sel => `<option value="">No edging</option>` + edges.map(e => `<option value="${e.id}" ${sel === e.id ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  const cnt = sel => [0, 1, 2].map(n => `<option value="${n}" ${+sel === n ? 'selected' : ''}>${n}</option>`).join('');
+  const files = (it.files || []).map(itemFile);
+  const boardCost = packs.reduce((a, x) => a + x.bins.length * (+x.m.price || 0), 0), edgeCost = edgeTotals(good).reduce((a, e) => a + Math.ceil(e.buy) * e.price, 0);
+  return `${asBanner()}<div class="noprint"><a href="#" onclick="go('items');return false">← Drawings</a></div>
+  <div class="row" style="align-items:center"><h1 style="margin-right:auto">${esc(it.name)}</h1>
+    <div class="row noprint"><button onclick="window.print()">🖨 Print cutting list</button><button onclick="itemToCalc()">➕ Add to Board calculator</button><button onclick="itemToProject()">➕ Add to a project</button>
+    <button onclick="const c=JSON.parse(JSON.stringify(IT()));c.id=uid();c.name+=' (copy)';c.files=[...IT().files];ITEMS().unshift(c);save();go('item',{item:c.id})">⧉ Copy</button>
+    <button class="danger" onclick="if(confirm('Delete this item and its drawing?')){dropItemFiles(IT());S.settings.items=ITEMS().filter(x=>x.id!==V.item);save();go('items')}">Delete</button></div></div>
+  ${V.itMsg ? `<div class="msg ai small noprint">${esc(V.itMsg)}</div>` : ''}${V.busy ? '<p class="noprint"><span class="spinner"></span> Reading the drawing…</p>' : ''}
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start">
+    <div class="card"><h3 style="margin-top:0">Drawing</h3>
+      ${files.length ? files.map(f => f ? `<a href="${f}" target="_blank" title="Open full size"><img src="${f}" alt="drawing" style="width:100%;border-radius:6px;background:#fff;margin-bottom:6px"></a>` : '<p class="muted small"><span class="spinner"></span> loading…</p>').join('') : '<p class="muted small">No drawing attached.</p>'}
+      <div class="row noprint"><label class="btn small">📎 Attach drawing<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="attachItemFiles(this.files)"></label>
+      ${files.length ? `<button class="small" onclick="V.busy=true;render();aiReadDrawing(IT()).then(()=>{V.busy=false;save();render()})">🤖 Read sizes &amp; parts with AI</button>` : ''}</div></div>
+    <div class="card"><h3 style="margin-top:0">Sizes</h3>
+      <label>Item name</label><input value="${esc(it.name)}" style="width:100%" onchange="itemSet('name',this.value)">
+      <div class="tablewrap" style="margin-top:8px"><table><tr><th>Letter</th><th>What it is</th><th>Size (mm)</th><th class="noprint"></th></tr>
+      ${(it.params || []).map((p, i) => `<tr><td><input value="${esc(p.k)}" style="width:60px;font-weight:700" onchange="itemSet('params.${i}.k',this.value.replace(/[^A-Za-z_0-9]/g,''))"></td>
+        <td><input value="${esc(p.label)}" style="width:170px" onchange="itemSet('params.${i}.label',this.value,false)"></td>
+        <td><input type="number" value="${p.v}" style="width:100px;font-size:17px;font-weight:700" onchange="itemSet('params.${i}.v',num(this.value)??0)"></td>
+        <td class="noprint"><button class="small danger" onclick="IT().params.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table></div>
+      <button class="small noprint" style="margin-top:6px" onclick="IT().params.push({k:'X'+(IT().params.length+1),label:'',v:0});save();render()">+ Add size</button>
+      <label style="margin-top:8px">Notes</label><textarea rows="3" style="width:100%" onchange="itemSet('notes',this.value,false)">${esc(it.notes || '')}</textarea></div>
+  </div>
+  <h2>Parts</h2><div class="card"><p class="small muted noprint" style="margin-top:0">Length, width and qty can be a number or a formula with the size letters, e.g. <b>H</b>, <b>W-2*S-6</b>, <b>S+G-17</b>. The worked-out size shows underneath.</p>
+    <div class="tablewrap"><table><tr><th>Part</th><th>Qty</th><th>Length</th><th>Width</th><th>Board</th><th>Edging</th><th>Long</th><th>Short</th><th>Grain</th><th class="noprint"></th></tr>
+    ${parts.map((p, i) => `<tr${p.bad ? ' style="background:#3d2424"' : ''}><td><input value="${esc(it.parts[i].name || '')}" style="width:150px" onchange="itemSet('parts.${i}.name',this.value)">${p.note ? `<div class="small muted">${esc(p.note)}</div>` : ''}</td>
+      ${['qty', 'L', 'W'].map(k => `<td><input value="${esc(it.parts[i][k])}" style="width:${k === 'qty' ? 55 : 110}px" onchange="itemSet('parts.${i}.${k}',this.value.trim())"><div class="small" style="color:${p.bad ? 'var(--bad)' : 'var(--accent2)'}">= ${isFinite(p[k]) ? p[k] : '?'}</div></td>`).join('')}
+      <td><select style="max-width:190px" onchange="itemSet('parts.${i}.matId',this.value)">${matOpts(p.matId)}</select></td>
+      <td><select style="max-width:150px" onchange="itemSet('parts.${i}.edge',this.value)">${edgeOpts(p.edge)}</select></td>
+      <td><select onchange="itemSet('parts.${i}.eL',+this.value)">${cnt(p.eL)}</select></td><td><select onchange="itemSet('parts.${i}.eW',+this.value)">${cnt(p.eW)}</select></td>
+      <td><input type="checkbox" ${p.grain ? 'checked' : ''} onchange="itemSet('parts.${i}.grain',this.checked)"></td>
+      <td class="noprint"><button class="small" title="Copy" onclick="IT().parts.splice(${i + 1},0,{...IT().parts[${i}],id:uid()});save();render()">⧉</button><button class="small danger" onclick="IT().parts.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}
+    </table></div>
+    <div class="row noprint" style="margin-top:8px"><button class="small" onclick="IT().parts.push({id:uid(),name:'Part',qty:'1',L:'',W:'',matId:(IT().parts.at(-1)||{}).matId||S.settings.roles.carcass,edge:'',eL:0,eW:0,grain:false});save();render()">+ Add part</button>
+      <button class="small" onclick="openBoardPicker()">+ New board</button></div></div>
+  ${good.length ? `<h2>Cutting list</h2><div class="card"><div class="tablewrap"><table><tr><th>Part</th><th>Qty</th><th>Length</th><th>Width</th><th>Thick</th><th>Board</th><th>Edging</th></tr>
+      ${good.map(p => `<tr><td>${esc(p.name)}</td><td>${p.qty}</td><td><b>${p.L}</b></td><td><b>${p.W}</b></td><td>${(mat(p.matId) || {}).t || ''}</td><td class="small">${esc((mat(p.matId) || {}).name || '?')}</td><td class="small">${p.edge ? `${esc(edgeName(p.edge))} ${p.eL}L ${p.eW}S` : ''}</td></tr>`).join('')}</table></div></div>
+    <h2>Boards needed</h2>${boardsSummary(packs)}${edgeTable(good)}
+    ${boardCost || edgeCost ? `<div class="card"><b>Material cost:</b> boards R ${boardCost.toFixed(2)}${edgeCost ? ` + edging R ${edgeCost.toFixed(2)}` : ''} = <b>R ${(boardCost + edgeCost).toFixed(2)}</b></div>` : ''}
+    <h2>Cutting layouts</h2>${packs.map(x => x.bins.map((b, i) => `<div class="card"><b>${esc(x.m.name)} — sheet ${i + 1} of ${x.bins.length}</b> <span class="muted small">(${x.m.L} × ${x.m.W}, kerf ${x.k} mm)</span>${sheetSVG(x, b, i)}</div>`).join('')).join('')}
+    <details><summary class="noprint" style="cursor:pointer;margin:6px 0">Show part drawings</summary>${partDrawings(good.map(p => ({ ...p, g: it.name })), 'g')}</details>` : ''}`;
+}
+async function attachItemFiles(files) {
+  const it = IT(); V.busy = true; render();
+  try { for (const f of files) { const imgs = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await pdfToImages(f) : [await imgToJpeg(f)]; for (const d of imgs.filter(Boolean)) await storeItemFile(it, d); } }
+  catch (e) { toast('Could not attach: ' + e.message); }
+  V.busy = false; save(); render();
+}
+function itemToCalc() {
+  const it = IT(), ps = itemParts(it).filter(p => !p.bad);
+  ps.forEach(p => CALC().parts.push({ id: uid(), name: `${p.name} (${it.name})`.slice(0, 80), L: p.L, W: p.W, qty: p.qty, matId: p.matId, edge: p.edge || '', eL: +p.eL || 0, eW: +p.eW || 0, grain: !!p.grain }));
+  save(); toast(`${ps.length} part line(s) added to the Board calculator.`); go('calc');
+}
+function itemToProject() {
+  if (!S.projects.length) { toast('Make a project first.'); return; }
+  modal(`<h3 style="margin-top:0">Add "${esc(IT().name)}" to a project</h3><p class="small muted">The parts go into the room's loose parts, so they're in its boards, cutting list and quotation.</p>
+    <div class="row"><div><label>Project</label><select id="itP" onchange="document.getElementById('itR').innerHTML=S.projects.find(p=>p.id===this.value).rooms.map(r=>'<option value='+r.id+'>'+esc(r.name)+'</option>').join('')+'<option value=new>+ New room</option>'">${S.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+    <div><label>Room</label><select id="itR">${S.projects[0].rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join('')}<option value="new">+ New room</option></select></div></div>
+    <div class="row" style="margin-top:10px"><button class="primary" onclick="itemToProjectGo()">Add</button><button onclick="modal('')">Cancel</button></div>`);
+}
+function itemToProjectGo() {
+  const it = IT(), p = S.projects.find(x => x.id === $('#itP').value); let rid = $('#itR').value, r;
+  if (rid === 'new') { r = { id: uid(), name: it.name, photos: [], shape: 'straight', walls: [newWall(0)], ai: null, mats: null }; p.rooms.push(r); } else r = p.rooms.find(x => x.id === rid);
+  r.parts = r.parts || [];
+  itemParts(it).filter(x => !x.bad).forEach(x => r.parts.push({ id: uid(), name: x.name, L: x.L, W: x.W, qty: x.qty, matId: x.matId, set: it.name, edges: x.edges, grain: !!x.grain }));
+  modal(''); V.pid = p.id; touch(); toast('Added to ' + p.name + ' → ' + r.name); go('room', { pid: p.id, rid: r.id, tab: 'cut' });
 }
 
 /* ---------- settings ---------- */
