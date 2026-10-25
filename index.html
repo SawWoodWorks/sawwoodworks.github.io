@@ -1710,6 +1710,32 @@ function CALC() { const c = S.settings.calc = S.settings.calc || { parts: [] }; 
 function calcEdges(p) { const e = p.edge || ''; if (!e) return ''; const L = +p.eL || 0, W = +p.eW || 0; return [L > 0 ? e : '0', L > 1 ? e : '0', W > 0 ? e : '0', W > 1 ? e : '0'].join(','); }
 function calcParts() { return CALC().parts.filter(p => +p.L > 0 && +p.W > 0 && +p.qty > 0).map((p, i) => ({ ...p, L: +p.L, W: +p.W, qty: +p.qty, ref: '', name: p.name || ('Part ' + (i + 1)), edges: calcEdges(p) })); }
 function calcSet(i, k, v) { CALC().parts[i][k] = v; save(); render(); }
+function CALCLISTS() { S.settings.calcLists = S.settings.calcLists || []; return S.settings.calcLists; }
+const calcCopy = arr => JSON.parse(JSON.stringify(arr || [])).map(p => ({ ...p, id: uid() }));
+function calcSaveAs() {
+  const name = prompt('Name this project', 'Project ' + (CALCLISTS().length + 1)); if (!name || !name.trim()) return;
+  const l = { id: uid(), name: name.trim(), saved: new Date().toISOString(), parts: calcCopy(CALC().parts) };
+  CALCLISTS().unshift(l); V.calcListId = l.id; save(); render(); toast('Saved as "' + l.name + '"');
+}
+function calcUpdateList() {
+  const l = CALCLISTS().find(x => x.id === V.calcListId); if (!l) return;
+  l.parts = calcCopy(CALC().parts); l.saved = new Date().toISOString(); save(); render(); toast('Updated "' + l.name + '"');
+}
+function calcOpenList(id) {
+  const l = CALCLISTS().find(x => x.id === id); if (!l) return;
+  if (CALC().parts.length && V.calcListId !== id && !confirm('Replace the working list with "' + l.name + '"? Save the working list first if you want to keep it.')) return;
+  CALC().parts = calcCopy(l.parts); V.calcListId = id; save(); render();
+}
+function calcRenameList(id) { const l = CALCLISTS().find(x => x.id === id); if (!l) return; const n = prompt('Rename project', l.name); if (n && n.trim()) { l.name = n.trim(); save(); render(); } }
+function calcDeleteList(id) { if (!confirm('Delete this saved project?')) return; S.settings.calcLists = CALCLISTS().filter(x => x.id !== id); if (V.calcListId === id) V.calcListId = null; save(); render(); }
+function calcListsCard() {
+  const ls = CALCLISTS(); if (!ls.length) return '';
+  return `<div class="card noprint"><h3 style="margin-top:0">Saved projects</h3>
+    <div class="tablewrap"><table><tr><th>Project</th><th>Pieces</th><th>Saved</th><th></th></tr>
+    ${ls.map(l => `<tr><td><b>${esc(l.name)}</b>${l.id === V.calcListId ? ' <span class="small muted">(open now)</span>' : ''}</td><td>${l.parts.reduce((a, p) => a + (+p.qty || 0), 0)}</td><td class="small">${new Date(l.saved).toLocaleDateString()}</td>
+    <td style="white-space:nowrap"><button class="small" onclick="calcOpenList('${l.id}')">Open</button> <button class="small" onclick="calcRenameList('${l.id}')">Rename</button> <button class="small danger" onclick="calcDeleteList('${l.id}')">Delete</button></td></tr>`).join('')}
+    </table></div></div>`;
+}
 function calcAdd() {
   const g = id => $('#' + id), L = num(g('cqL').value), W = num(g('cqW').value);
   if (!L || !W) { toast('Fill in the length and width.'); g(L ? 'cqW' : 'cqL').focus(); return; }
@@ -1729,6 +1755,7 @@ function viewCalc() {
   const enter = `onkeydown="if(event.key==='Enter'){event.preventDefault();calcAdd()}"`;
   return `${asBanner()}<h1>Board calculator</h1>
   <p class="muted noprint" style="margin-top:-6px">Quick boards for shelves, panels and odd parts — no rooms or walls needed. Type the sizes, press <b>Enter</b> or <b>+ Add</b>, and the boards, edging and cutting layouts work out below.</p>
+  ${calcListsCard()}
   <div class="card noprint"><h3 style="margin-top:0">Add a part</h3><div class="row">
     <div><label>Name</label><input id="cqN" placeholder="Shelf, side panel…" style="width:160px" ${enter}></div>
     <div><label>Length (mm)</label><input id="cqL" type="number" ${enter}></div>
@@ -1742,6 +1769,7 @@ function viewCalc() {
     <button class="primary" onclick="calcAdd()">+ Add</button></div>
     <p class="small muted" style="margin-bottom:0">Boards and edging come from Settings → Board materials / Prices. Long edges run along the length.</p></div>
   ${c.parts.length ? `<div class="card"><div class="row noprint" style="margin-bottom:6px"><b style="margin-right:auto">Parts (${c.parts.reduce((a, p) => a + (+p.qty || 0), 0)} pieces)</b>
+      <button class="small primary" onclick="calcSaveAs()">💾 Save as project</button>${V.calcListId && CALCLISTS().find(x => x.id === V.calcListId) ? ` <button class="small" onclick="calcUpdateList()">Update “${esc(CALCLISTS().find(x => x.id === V.calcListId).name)}”</button>` : ''}
       <button class="small" onclick="window.print()">🖨 Print</button>
       <button class="small danger" onclick="if(confirm('Clear all parts?')){CALC().parts=[];save();render()}">Clear all</button></div>
     <div class="tablewrap"><table><tr><th>Name</th><th>Length</th><th>Width</th><th>Qty</th><th>Board</th><th>Edging</th><th>Long</th><th>Short</th><th>Grain</th><th class="noprint"></th></tr>
