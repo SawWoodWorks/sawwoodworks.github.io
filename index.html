@@ -2125,6 +2125,7 @@ function viewCatalogues() {
   const msg = V.catMsg ? `<div class="msg ai small noprint">${esc(V.catMsg)}</div>` : '';
   return `${asBanner()}<h1>Catalogues</h1>
   <p class="muted" style="margin-top:-6px">Upload a supplier's catalogue PDF here. It stays on this PC; only the page you choose is sent to the AI to read. Search the catalogue, read the pages you need, then tick the products that are right. Only ticked products go into the fittings library.</p>
+  <p class="small muted noprint" style="margin-top:0">You can also drop a catalogue PDF anywhere on this screen.</p>
   <div class="card noprint"><div class="row"><label class="btn primary" style="color:#fff;background:var(--accent);border-color:var(--accent)">📚 Upload a catalogue PDF<input type="file" accept="application/pdf" style="display:none" onchange="catUpload(this.files)"></label>
     ${c ? `<label class="btn small">Choose the PDF again (after a reload)<input type="file" accept="application/pdf" style="display:none" onchange="catReopen(this.files)"></label>` : ''}</div>
     ${V.busy ? '<p><span class="spinner"></span> Working…</p>' : ''}${msg}</div>
@@ -2143,6 +2144,32 @@ function viewCatalogues() {
     <div class="row" style="margin-top:10px"><button class="danger small" onclick="if(confirm('Remove this catalogue and all its products from the library?')){S.settings.catalogues=CAT().filter(x=>x.id!==V.catId);V.catId=null;delete CAT_DOC[c.id];delete CAT_TEXT[c.id];save();render()}">Remove this catalogue</button></div>
   </div>` : ''}`;
 }
+
+
+/* ============ drag and drop: drop files anywhere on the page, they go to the right place for the open screen ============ */
+let DROP_DEPTH = 0;
+const dropHasFiles = e => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+function dropHint(show) {
+  let h = document.getElementById('dropHint');
+  if (!h) { h = document.createElement('div'); h.id = 'dropHint'; h.style.cssText = 'display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);color:#fff;align-items:center;justify-content:center;font-size:22px;pointer-events:none;border:4px dashed var(--accent);box-sizing:border-box';
+    h.textContent = 'Drop the file here'; document.body.appendChild(h); }
+  h.style.display = show ? 'flex' : 'none';
+}
+function dropFiles(files) {
+  const list = [...(files || [])];
+  const pdfs = list.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  const imgs = list.filter(f => f.type.startsWith('image/'));
+  const drawings = [...imgs, ...pdfs];
+  if (V.view === 'catalogues') { if (pdfs.length) catUpload(pdfs); else toast('Drop a catalogue PDF here.'); return; }
+  if (V.view === 'items') { if (drawings.length) importDrawing(drawings); else toast('Drop a drawing photo or PDF here.'); return; }
+  if (V.view === 'item') { if (drawings.length) attachItemFiles(drawings); else toast('Drop a drawing photo or PDF here.'); return; }
+  if ((V.view === 'project' || V.view === 'room') && imgs.length) { if (V.view === 'room' && R()) addPhotos(imgs); else toast('Open a room to drop photos into it.'); return; }
+  toast('Open a drawing, a catalogue or a room, then drop the file.');
+}
+window.addEventListener('dragenter', e => { if (!dropHasFiles(e)) return; e.preventDefault(); DROP_DEPTH++; dropHint(true); });
+window.addEventListener('dragover', e => { if (!dropHasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+window.addEventListener('dragleave', e => { if (!dropHasFiles(e)) return; DROP_DEPTH = Math.max(0, DROP_DEPTH - 1); if (DROP_DEPTH === 0) dropHint(false); });
+window.addEventListener('drop', e => { if (!dropHasFiles(e)) return; e.preventDefault(); DROP_DEPTH = 0; dropHint(false); dropFiles(e.dataTransfer.files); });
 
 /* ============ Drawings: bring in a design drawing, change the sizes, get the cutting list ============ */
 function ITEMS() { return S.settings.items = S.settings.items || []; }
@@ -2282,6 +2309,7 @@ function viewItems() {
   return `${asBanner()}<h1>Drawings</h1>
   <p class="muted" style="margin-top:-6px">Bring in a design drawing (photo or PDF scan). The app reads the sizes and cutting list into an item you can resize — change the overall sizes and every part, the boards and the cutting layouts follow.</p>
   <div class="card noprint"><div class="row">
+    <p class="small muted">You can also drop a drawing photo or PDF anywhere on this screen.</p>
     <label class="btn primary" style="color:#fff;background:var(--accent);border-color:var(--accent)">📄 Bring in a drawing (photo / PDF)<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="importDrawing(this.files)"></label>
     <button onclick="newItem()">+ Blank item</button><button onclick="newItem('example')">+ Example: 3-panel headboard</button></div>
     ${V.busy ? '<p><span class="spinner"></span> Reading the drawing — this can take up to a minute…</p>' : ''}${V.itMsg && V.view === 'items' ? `<div class="msg ai small">${esc(V.itMsg)}</div>` : ''}</div>
