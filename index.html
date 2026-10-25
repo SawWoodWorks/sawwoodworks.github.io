@@ -2080,6 +2080,7 @@ function udCard(it, parts) {
       </div>
       <p class="small muted" style="margin:6px 0 0">Thickness changes the board only. Sizes do not change by themselves: if a side gets thicker, change the shelf and top/bottom lengths in the Parts table.</p></div>`
     : `<p class="small muted" style="margin:10px 0 0">Click a part in the drawing to select it, then change its part type, make it solid wood or change its thickness.</p>`;
+  const splitsTxt = (it.splits || []).join(', ');
   const th = udThk(it), nd = it.dividers || 0, nb = it.battens || 0;
   const span = Math.round(g.W - 2 * th.side), sugg = Math.max(0, Math.ceil(span / UD_MAX_SPAN) - 1);
   const opts = (max, cur) => Array.from({ length: max + 1 }, (_, v) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${v === 0 ? 'None' : v}</option>`).join('');
@@ -2107,7 +2108,6 @@ function udCard(it, parts) {
     ${fronts.length ? fronts.map(p => `<div class="row" style="align-items:center;gap:14px;border-top:1px solid var(--line);padding:8px 0">${udGripSVG(p.grip || 'none')}<div style="flex:1"><b>${esc(p.name)}</b><div class="small">${p.L} × ${p.W} mm${p.grain ? ' · grain ' + (it.swapped ? 'left to right' : 'up and down') : ''}</div>
       <label class="small">Finger grip <select onchange="udSetGrip(${p.i},this.value)">${UD_GRIPS.map(([v, l]) => `<option value="${v}" ${(p.grip || 'none') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div></div>`).join('') : '<p class="small muted">Choose the number of doors or drawer fronts above to size them from the gaps.</p>'}
   </div>`;
-  const splitsTxt = (it.splits || []).join(', ');
   return `<div class="row" style="align-items:center"><h2 style="margin-right:auto">Unit drawing</h2><button class="small" onclick="udAssemblySheet(IT())">🖨 Assembly sheet</button></div><div class="card">
     <p class="small muted noprint" style="margin-top:0">Front, side and depth views built from the parts list. Solid wood parts are drawn in timber colour. Clicking a part selects it.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
