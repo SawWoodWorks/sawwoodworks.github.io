@@ -2001,6 +2001,14 @@ function udGripSVG(grip) {
   const slot = { top: '<rect x="22" y="8" width="26" height="8" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', bottom: '<rect x="22" y="80" width="26" height="8" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', left: '<rect x="8" y="40" width="8" height="20" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', right: '<rect x="54" y="40" width="8" height="20" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>' }[grip] || '';
   return `<svg viewBox="0 0 70 96" width="70" height="96"><rect x="4" y="4" width="62" height="88" rx="2" fill="#fff" stroke="#6b4a2e" stroke-width="1.5"/>${slot}</svg>`;
 }
+function udRefViews(it, parts) {   // the cupboard drawn from the parts, shown beside the uploaded drawing; it updates with every change
+  const g = udGeo(it, parts.filter(p => !p.bad));
+  if (!g) return '<p class="small muted">Give the W, H and D sizes to see the cupboard drawing here.</p>';
+  return `<div style="display:grid;gap:8px">
+    <div><div class="small muted">Front view</div>${udSVG('front', g)}</div>
+    <div><div class="small muted">Side view (depth)</div>${udSVG('side', g)}</div>
+    <div><div class="small muted">Top view</div>${udSVG('plan', g)}</div></div>`;
+}
 function udCard(it, parts) {
   UD_SEL = UD_SEL && UD_SEL.id === it.id ? UD_SEL : null;
   const g = udGeo(it, parts);
@@ -2042,7 +2050,7 @@ function udCard(it, parts) {
     ${fronts.length ? fronts.map(p => `<div class="row" style="align-items:center;gap:14px;border-top:1px solid var(--line);padding:8px 0">${udGripSVG(p.grip || 'none')}<div style="flex:1"><b>${esc(p.name)}</b><div class="small">${p.L} × ${p.W} mm${p.grain ? ' · grain ' + (it.swapped ? 'left to right' : 'up and down') : ''}</div>
       <label class="small">Finger grip <select onchange="udSetGrip(${p.i},this.value)">${UD_GRIPS.map(([v, l]) => `<option value="${v}" ${(p.grip || 'none') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div></div>`).join('') : '<p class="small muted">Choose the number of doors or drawer fronts above to size them from the gaps.</p>'}
   </div>`;
-  return `<h2>Unit drawing</h2><div class="card">
+  return `<div class="row" style="align-items:center"><h2 style="margin-right:auto">Unit drawing</h2><button class="small" onclick="udAssemblySheet(IT())">🖨 Assembly sheet</button></div><div class="card">
     <p class="small muted noprint" style="margin-top:0">Front, side and depth views built from the parts list. Solid wood parts are drawn in timber colour. Clicking a part selects it.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
       ${[['Front', 'front'], ['Side (depth)', 'side'], ['Plan (from above)', 'plan']].map(([t, k]) => `<div><div class="small muted">${t}</div>${udSVG(k, g)}</div>`).join('')}
@@ -2170,6 +2178,28 @@ window.addEventListener('dragenter', e => { if (!dropHasFiles(e)) return; e.prev
 window.addEventListener('dragover', e => { if (!dropHasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
 window.addEventListener('dragleave', e => { if (!dropHasFiles(e)) return; DROP_DEPTH = Math.max(0, DROP_DEPTH - 1); if (DROP_DEPTH === 0) dropHint(false); });
 window.addEventListener('drop', e => { if (!dropHasFiles(e)) return; e.preventDefault(); DROP_DEPTH = 0; dropHint(false); dropFiles(e.dataTransfer.files); });
+
+
+/* ============ assembly sheet: front, side and top views, fronts and parts list, ready to print ============ */
+function udAssemblySheet(it) {
+  if (!it) return;
+  const parts = itemParts(it).filter(p => !p.bad);
+  const g = udGeo(it, parts);
+  if (!g) { toast('Give the unit W, H and D sizes first.'); return; }
+  const rows = parts.map(p => `<tr><td>${esc(p.name)}</td><td>${p.qty}</td><td>${p.L} × ${p.W}</td><td>${esc((mat(p.matId) || {}).name || '')}</td><td>${p.grip && p.grip !== 'none' ? 'Finger grip: ' + p.grip + ' · ' : ''}${p.grain ? 'grain set' : ''}</td></tr>`).join('');
+  const fronts = parts.filter(p => p.auto === 'front').map(p => `<div style="display:inline-block;margin:4px;text-align:center">${udGripSVG(p.grip || 'none')}<div style="font-size:12px">${esc(p.name)}<br>${p.L} × ${p.W}</div></div>`).join('');
+  const views = `<div class="views"><div><h2>Front view</h2>${udSVG('front', g)}</div><div><h2>Side view (depth)</h2>${udSVG('side', g)}</div><div><h2>Top view</h2>${udSVG('plan', g)}</div></div>`.replace(/var\(--new\)/g, '#e6d3b3');
+  const css = 'body{font-family:Arial,sans-serif;color:#222;margin:20px}h1{font-size:20px;margin:0}h2{font-size:14px;margin:12px 0 6px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{border:1px solid #bbb;padding:4px 6px;text-align:left}.views{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}@media print{button{display:none}}';
+  const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups to print the assembly sheet.'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Assembly sheet - ${esc(it.name || '')}</title><style>${css}</style></head><body>
+    <h1>${esc(it.name || 'Unit')}</h1><div style="font-size:12px;color:#555">${esc(it.job || '')} · ${Math.round(g.W)} × ${Math.round(g.H)} × ${Math.round(g.D)} mm overall</div>
+    ${views}
+    ${fronts ? `<h2>Fronts</h2>${fronts}` : ''}
+    <h2>Parts list</h2><table><tr><th>Part</th><th>Qty</th><th>Length × width (mm)</th><th>Board</th><th>Notes</th></tr>${rows}</table>
+    <p style="font-size:11px;color:#666">Check every size against the drawing before cutting.</p>
+    <button onclick="window.print()">Print</button></body></html>`);
+  w.document.close();
+}
 
 /* ============ Drawings: bring in a design drawing, change the sizes, get the cutting list ============ */
 function ITEMS() { return S.settings.items = S.settings.items || []; }
@@ -2346,6 +2376,7 @@ function viewItem() {
         <td class="noprint"><button class="small danger" onclick="IT().params.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table></div>
       <button class="small noprint" style="margin-top:6px" onclick="IT().params.push({k:'X'+(IT().params.length+1),label:'',v:0});save();render()">+ Add size</button>
       <label style="margin-top:8px">Notes</label><textarea rows="3" style="width:100%" onchange="itemSet('notes',this.value,false)">${esc(it.notes || '')}</textarea></div>
+    <div class="card"><h3 style="margin-top:0">Cupboard drawing</h3>${udRefViews(it, parts)}</div>
   </div>
   ${udCard(it, parts)}
   <h2>Parts</h2><div class="card"><p class="small muted noprint" style="margin-top:0">Length, width and qty can be a number or a formula with the size letters, e.g. <b>H</b>, <b>W-2*S-6</b>, <b>S+G-17</b>. The worked-out size shows underneath.</p>
