@@ -525,7 +525,7 @@ function renderNav() {
   const nav = document.querySelector('header nav'); if (!nav) return;
   if (CLOUD && (!ME || !ME.role)) { nav.innerHTML = ''; return; }
   const b = (v, l) => `<button onclick="go('${v}')" ${V.view === v || (v === 'items' && V.view === 'item') ? 'class="on"' : ''}>${l}</button>`;
-  nav.innerHTML = b('projects', 'Projects') + b('calc', 'Board calculator') + b('items', 'Drawings') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
+  nav.innerHTML = b('projects', 'Projects') + b('calc', 'Board calculator') + b('items', 'Drawings') + b('catalogues', 'Catalogues') + (lhVisible() ? b('letterhead', 'Letterhead') : '') + (isRoot() ? b('users', 'Users') : '') + b('settings', 'Settings');
 }
 
 /* ---- account card in Settings ---- */
@@ -1351,6 +1351,7 @@ function render() {
   if ((V.view === 'project' || V.view === 'room') && P()) watchPhotos(V.pid);
   if (V.view === 'calc') { a.innerHTML = viewCalc(); return; }
   if (V.view === 'items') { a.innerHTML = viewItems(); return; }
+  if (V.view === 'catalogues') { a.innerHTML = viewCatalogues(); return; }
   if (V.view === 'item') { a.innerHTML = viewItem(); return; }
   if (V.view === 'settings') a.innerHTML = viewSettings();
   else if (V.view === 'project' && P()) a.innerHTML = viewProject();
@@ -1494,14 +1495,14 @@ async function gFetch(url, body) {
     const u = m === 1 ? url + (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key) : url;
     const r = await fetch(u, body ? { method: 'POST', headers: h, body } : { headers: h });
     if (r.status !== 401 && r.status !== 403) { GMODE = m; return r; }
-    last = r;
+    if (m === 0 || !last) last = r;
   }
   return last;
 }
 function gErr(j, status) {
   const m = (j && j.error && j.error.message) || ('HTTP ' + status);
   if (status === 429) return 'free daily limit reached — try again later';
-  if (/unregistered callers|ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|OAuth 2/i.test(m)) return 'Google did not accept this AI key. Keys starting with "AQ." often don\'t work — make a key starting with "AIza" instead (Google Cloud console → APIs & Services → Credentials → Create credentials → API key, on the same project) and paste it in Settings → AI photo reading.';
+  if (/unregistered callers|ACCESS_TOKEN_TYPE_UNSUPPORTED|API key not valid|OAuth 2|PERMISSION_DENIED|referer|blocked/i.test(m)) return '(Google says: ' + m + ') Google did not accept this AI key. Keys starting with "AQ." often don\'t work — make a key starting with "AIza" instead (Google Cloud console → APIs & Services → Credentials → Create credentials → API key, on the same project) and paste it in Settings → AI photo reading.';
   return m;
 }
 async function pickModel(force) {
@@ -1822,6 +1823,327 @@ function boardTypesCard() {
 }
 
 
+/* ============ unit drawing: front, side and depth (plan) views built from the parts list ============ */
+let UD_SEL = null;   // index of the selected part in the item being viewed
+const UD_ROLES = [['', 'Auto (from name)'], ['side', 'Side'], ['top', 'Top'], ['bottom', 'Bottom'], ['back', 'Back'], ['shelf', 'Shelf'], ['door', 'Door'], ['drawer', 'Drawer front'], ['other', 'Other']];
+const udRoleOpts = sel => UD_ROLES.map(([v, l]) => `<option value="${v}" ${(sel || '') === v ? 'selected' : ''}>${l}</option>`).join('');
+function udRole(p) {   // the part type: what the user chose, otherwise worked out from the name
+  if (p.role) return p.role;
+  const n = String(p.name || '').toLowerCase();
+  if (/divid|vertical/.test(n)) return 'divider';
+  if (/batten|horizontal/.test(n)) return 'batten';
+  if (/door|deur/.test(n)) return 'door';
+  if (/drawer|laai/.test(n)) return 'drawer';
+  if (/back|rug/.test(n)) return 'back';
+  if (/side|syd|zij/.test(n)) return 'side';
+  if (/shel|rak/.test(n)) return 'shelf';
+  if (/\btop\b/.test(n)) return 'top';
+  if (/bottom|base|bodem/.test(n)) return 'bottom';
+  return 'other';
+}
+const udSolid = m => !!m && /solid/i.test(m.type || '');
+function udSel(it) { return UD_SEL && UD_SEL.id === it.id ? UD_SEL.i : null; }
+function selPart(i) {
+  const it = IT(); if (!it) return;
+  UD_SEL = UD_SEL && UD_SEL.id === it.id && UD_SEL.i === i ? null : { id: it.id, i };
+  render();
+}
+function udMatId(pred, t, name, type, rotate) {   // find a board of this thickness, or add one
+  const hit = S.settings.materials.find(x => +x.t === t && pred(x)); if (hit) return hit.id;
+  const bt = boardTypes().find(x => x.name === type) || {}, sz = (bt.sizes || ['2750x1830'])[0].split('x').map(Number);
+  const id = uid(); S.settings.materials.push({ id, name: `${name} ${t}mm`, type, t, L: sz[0], W: sz[1], kerf: 4, trim: 10, rotate, price: 0 }); return id;
+}
+function udSetSolid(i, on) {
+  const it = IT(), p = it.parts[i], m = mat(p.matId) || {}, t = +m.t || 18;
+  p.matId = on ? udMatId(x => udSolid(x), t, 'Solid pine', 'Solid wood / laminated pine', false)
+               : udMatId(x => !udSolid(x), t, 'Board', 'Melamine on chipboard', true);
+  p.grain = !!on; save(); render();
+}
+function udSetThick(i, t) {
+  const it = IT(), p = it.parts[i], m = mat(p.matId) || {};
+  if (udSolid(m)) p.matId = udMatId(x => udSolid(x), t, 'Solid pine', 'Solid wood / laminated pine', false);
+  else { const type = m.type || 'Melamine on chipboard', base = String(m.name || 'Board').replace(/\s*\d+\s*mm\s*$/i, '').trim() || 'Board';
+    p.matId = udMatId(x => !udSolid(x) && x.type === type, t, base, type, m.rotate !== false); }
+  save(); render();
+}
+function udGeo(it, parts) {
+  const inst = [];
+  parts.forEach(p => { const n = Math.min(40, Math.max(1, +p.qty || 1)); for (let k = 0; k < n; k++) inst.push({ pi: p.i, role: udRole(p), p }); });
+  const by = r => inst.filter(x => x.role === r);
+  const prm = k => { const v = (it.params || []).find(x => x.k === k); return v && +v.v > 0 ? +v.v : 0; };
+  const mx = (a, f) => a.reduce((m, x) => Math.max(m, f(x)), 0);
+  const sides = by('side'), tops = by('top').concat(by('bottom')), backs = by('back'), shelves = by('shelf'), doors = by('door'), drawers = by('drawer');
+  const W = prm('W') || mx(tops.concat(backs), x => x.p.L) || mx(sides, x => x.p.W);
+  const H = prm('H') || mx(sides, x => x.p.L) || mx(backs, x => x.p.W);
+  const D = prm('D') || mx(sides, x => x.p.W) || mx(tops, x => x.p.W);
+  if (!(W > 0 && H > 0 && D > 0)) return null;
+  const tOf = x => x ? +(mat(x.p.matId) || {}).t || 0 : 0;
+  const T = tOf(sides[0]) || tOf(tops[0]) || 18, Tb = tOf(backs[0]) || 6, Td = tOf(doors[0]) || T;
+  return { W, H, D, T, Tb, Td, sides, tops, backs, shelves, doors, drawers, dividers: by('divider') };
+}
+function udZones(g) {   // vertical zones inside the carcass: drawers on top, doors/shelves below
+  const iy0 = g.T, iy1 = g.H - g.T, ih = iy1 - iy0, hasD = g.doors.length > 0, hasR = g.drawers.length > 0;
+  const dz = hasR ? (hasD ? ih * 0.25 : ih) : 0, dy0 = iy0 + (hasR ? dz : 0);
+  return { iy0, iy1, dz, hasD, hasR, dy0 };
+}
+function udShelfYs(g) { const z = udZones(g), n = g.shelves.length; return g.shelves.map((_, j) => z.dy0 + (z.iy1 - z.dy0) * (j + 1) / (n + 1)); }
+const udPart = x => x ? { pi: x.pi, fill: udSolid(mat(x.p.matId)) ? '#c89b64' : undefined, title: x.p.name } : {};
+const udRect = (x, y, w, h, o = {}) => {
+  const sel = o.pi != null && o.pi === UD_SEL;
+  return `<rect x="${x}" y="${y}" width="${Math.max(w, 0)}" height="${Math.max(h, 0)}" fill="${o.fill || 'var(--new)'}${o.dash ? '" fill-opacity=".45' : '"'} stroke="${sel ? '#e0a040' : '#6b4a2e'}" stroke-width="${sel ? 4 : 1.5}" vector-effect="non-scaling-stroke"${o.dash ? ' stroke-dasharray="6 4"' : ''}${o.pi != null ? ` onclick="selPart(${o.pi})" style="cursor:pointer"` : ''}><title>${esc(o.title || '')}</title></rect>`;
+};
+const udHdl = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#333" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round"/>`;
+function udFront(g) {
+  const { W, H, T, sides, tops, shelves, doors, drawers } = g, z = udZones(g), pp = udPart;
+  let s = '';
+  if (sides[0]) s += udRect(0, 0, T, H, pp(sides[0])) + udRect(W - T, 0, T, H, pp(sides[1] || sides[0]));
+  if (tops[0]) s += udRect(T, 0, W - 2 * T, T, pp(tops[0]));
+  if (tops[1]) s += udRect(T, H - T, W - 2 * T, T, pp(tops[1]));
+  udShelfYs(g).forEach((y, j) => { s += udRect(T, y - T / 2, W - 2 * T, T, pp(shelves[j])); });
+  g.dividers.forEach((x, j) => { const xc = T + (W - 2 * T) * (j + 1) / (g.dividers.length + 1); s += udRect(xc - T / 2, T, T, H - 2 * T, pp(x)); });
+  if (z.hasR) { const dh = z.dz / drawers.length;
+    drawers.forEach((x, k) => { const y = z.iy0 + k * dh; s += udRect(0, y + 2, W, dh - 4, pp(x)) + udHdl(W / 2 - W * 0.07, y + dh / 2, W / 2 + W * 0.07, y + dh / 2); }); }
+  if (z.hasD) { const nd = doors.length, dw = W / nd, y0 = z.dy0, y1 = g.H - g.T;
+    doors.forEach((x, k) => { const dx = k * dw, hx = nd === 1 ? W - W * 0.07 : (k < nd / 2 ? dx + dw - dw * 0.12 : dx + dw * 0.12), hc = (y0 + y1) / 2, hh = (y1 - y0) * 0.06;
+      s += udRect(dx + 2, y0 + 2, dw - 4, y1 - y0 - 4, pp(x)) + udHdl(hx, hc - hh, hx, hc + hh); }); }
+  return s;
+}
+function udSide(g) {
+  const { D, H, T, Tb, Td, sides, backs, shelves, doors } = g, pp = udPart;
+  let s = '';
+  if (sides[0]) s += udRect(0, 0, D, H, pp(sides[0]));
+  if (backs[0]) s += udRect(0, 0, Tb, H, pp(backs[0]));
+  udShelfYs(g).forEach((y, j) => { s += udRect(Tb, y - T / 2, D - Tb, T, { ...pp(shelves[j]), dash: true }); });
+  if (doors[0]) s += udRect(D - Td, 0, Td, H, pp(doors[0]));
+  return s;
+}
+function udPlan(g) {
+  const { W, D, T, Tb, Td, sides, tops, backs, doors } = g, pp = udPart, y0 = Tb;
+  let s = '';
+  if (backs[0]) s += udRect(0, 0, W, Tb, pp(backs[0]));
+  if (sides[0]) s += udRect(0, y0, T, D - Tb, pp(sides[0])) + udRect(W - T, y0, T, D - Tb, pp(sides[1] || sides[0]));
+  if (tops[0]) s += udRect(T, y0, W - 2 * T, D - Tb, pp(tops[0]));
+  g.dividers.forEach((x, j) => { const xc = T + (W - 2 * T) * (j + 1) / (g.dividers.length + 1); s += udRect(xc - T / 2, y0, T, D - Tb, pp(x)); });
+  if (doors.length) { const dw = W / doors.length; doors.forEach((x, k) => { s += udRect(k * dw, D - Td, dw, Td, pp(x)); }); }
+  return s;
+}
+function udSVG(kind, g) {
+  const [w, h, lw, lh, body] = kind === 'front' ? [g.W, g.H, 'W', 'H', udFront(g)] : kind === 'side' ? [g.D, g.H, 'D', 'H', udSide(g)] : [g.W, g.D, 'W', 'D', udPlan(g)];
+  const pad = Math.max(g.W, g.H, g.D) * 0.14, fs = Math.max(g.W, g.H, g.D) / 24;
+  return `<div style="background:#fff;border-radius:8px;padding:4px"><svg viewBox="${-pad} ${-pad} ${w + 2 * pad} ${h + 2 * pad}" style="width:100%;max-height:260px;display:block" font-size="${fs}">${body}
+    <text x="${w / 2}" y="${h + pad * 0.7}" text-anchor="middle" fill="#333">${r0(w)} ${lw}</text>
+    <text x="0" y="0" transform="translate(${-pad * 0.6} ${h / 2}) rotate(-90)" text-anchor="middle" fill="#333">${r0(h)} ${lh}</text></svg></div>`;
+}
+const UD_MAX_SPAN = 200;   // mm: the longest unsupported span between the sides before vertical dividers are needed
+const UD_THK_OPTS = [12, 16, 17, 18, 19, 22, 25, 32];
+function udThk(it) { return Object.assign({ side: 17, tb: 17, div: 17, bat: 17, front: 18 }, it.thick || {}); }
+function udSetSupport(kind, n) {   // one cut-list line per support type, sized from the thicknesses chosen on the drawing
+  const it = IT(); if (!it) return; n = Math.max(0, Math.min(12, +n || 0)); const th = udThk(it);
+  it.parts = it.parts.filter(p => p.auto !== kind);
+  if (n > 0) {
+    const t = kind === 'divider' ? th.div : th.bat;
+    const matId = udMatId(x => !udSolid(x), t, 'Board', 'Melamine on chipboard', true);
+    const base = { qty: String(n), W: 'D', matId, edge: '', eL: '', eW: '', grain: false, note: `${t} mm, added from unit drawing`, auto: kind };
+    const line = kind === 'divider' ? { ...base, name: 'Vertical divider', L: `H-${2 * th.tb}` } : { ...base, name: 'Horizontal batten', L: `W-${2 * th.side}` };
+    if (it.swapped) [line.L, line.W] = [line.W, line.L];
+    it.parts.push(line);
+  }
+  if (kind === 'divider') it.dividers = n; else it.battens = n;
+  save(); render();
+}
+function udSetT(key, v) {   // change a chosen thickness and re-size any dividers and battens already in the cut list
+  const it = IT(); if (!it) return; it.thick = udThk(it); it.thick[key] = +v || 17; save();
+  udSetSupport('divider', it.dividers || 0); udSetSupport('batten', it.battens || 0);
+  if (it.fronts && it.fronts.n) udBuildFronts(it);
+  save(); render();
+}
+const UD_GAPS = [['top', 'Door to top'], ['bot', 'Door to bottom'], ['side', 'Door to sides'], ['between', 'Between doors'], ['drawer', 'Between drawer fronts'], ['grip', 'Finger-grip opening']];
+const UD_GRIPS = [['none', 'No grip'], ['top', 'Top edge'], ['bottom', 'Bottom edge'], ['left', 'Left edge'], ['right', 'Right edge']];
+function udGaps(it) { return Object.assign({ top: 2, bot: 2, side: 2, between: 2, drawer: 2, grip: 20 }, it.gaps || {}); }
+function udBuildFronts(it) {   // one cut-list line per door or drawer front; the finger-grip opening applies only on the edge with a grip
+  const f = it.fronts; it.parts = it.parts.filter(p => p.auto !== 'downstand');
+  if (!f || !(f.n > 0)) { it.parts = it.parts.filter(p => p.auto !== 'front'); return; }
+  const g = udGaps(it), th = udThk(it), n = f.n;
+  const old = it.parts.filter(p => p.auto === 'front').map(p => p.grip || 'none');
+  it.parts = it.parts.filter(p => p.auto !== 'front');
+  const matId = udMatId(x => !udSolid(x), th.front, 'Board', 'Melamine on chipboard', true);
+  for (let k = 0; k < n; k++) {
+    const grip = old[k] || 'none', top = grip === 'top' ? g.grip : g.top, bot = grip === 'bottom' ? g.grip : g.bot;
+    const sideExtra = (grip === 'left' || grip === 'right') ? (g.grip - g.side) : 0;
+    const line = f.mode === 'doors'
+      ? { name: `Door ${k + 1}`, L: `H-${top}-${bot}`, W: `(W-2*${g.side}-${n - 1}*${g.between})/${n}${sideExtra ? '-' + sideExtra : ''}` }
+      : { name: `Drawer front ${k + 1}`, L: `W-2*${g.side}${sideExtra ? '-' + sideExtra : ''}`, W: `(H-${g.top}-${g.bot}-${n - 1}*${g.drawer})/${n}${(grip === 'top' || grip === 'bottom') ? '-' + (g.grip - g.drawer) : ''}` };
+    if (it.swapped) [line.L, line.W] = [line.W, line.L];
+    it.parts.push({ qty: '1', matId, edge: '', eL: '', eW: '', grain: !!it.grain && it.grain !== 'none', note: 'front, added from unit drawing', auto: 'front', grip, ...line });
+  }
+  // each opening with a finger grip on its top edge gets its own rail, running between the sides, behind the door top
+  const topGrips = it.parts.filter(p => p.auto === 'front' && p.grip === 'top').length;
+  if (topGrips > 0) {
+    const tbMat = udMatId(x => !udSolid(x), th.tb, 'Board', 'Melamine on chipboard', true);
+    const ds = { qty: '1', matId: tbMat, edge: '', eL: '', eW: '', grain: !!it.grain && it.grain !== 'none', note: 'finger grip rail', auto: 'downstand', name: 'Finger grip rail', L: `W-2*${th.side}`, W: String(it.downstand || 100) };
+    ds.qty = String(topGrips);   // one rail for each opening that has a top finger grip
+    if (it.swapped) [ds.L, ds.W] = [ds.W, ds.L];
+    it.parts.push(ds);
+  }
+}
+function udSetDownstand(v) { const it = IT(); if (!it) return; it.downstand = Math.max(20, +v || 100); if (it.fronts && it.fronts.n) udBuildFronts(it); save(); render(); }
+function udSetFronts(mode, n) { const it = IT(); if (!it) return; it.fronts = { mode, n: Math.max(0, Math.min(8, +n || 0)) }; udBuildFronts(it); save(); render(); }
+function udSetGap(k, v) { const it = IT(); if (!it) return; it.gaps = { ...udGaps(it), [k]: Math.max(0, +v || 0) }; if (it.fronts && it.fronts.n) udBuildFronts(it); save(); render(); }
+function udSetGrain(v) {   // 'up' = the length of each part runs up the height; 'across' = along the width (lengths and widths are swapped)
+  const it = IT(); if (!it) return; const want = v === 'across';
+  if (!!it.swapped !== want) { it.parts.forEach(p => { if (p.auto !== 'front') [p.L, p.W] = [p.W, p.L]; }); it.swapped = want; }
+  it.grain = v; it.parts.forEach(p => { p.grain = v !== 'none'; });
+  if (it.fronts && it.fronts.n) udBuildFronts(it);
+  save(); render();
+}
+function udSetGrip(i, v) { const it = IT(); if (!it || !it.parts[i]) return; it.parts[i].grip = v; if (it.fronts && it.fronts.n) udBuildFronts(it); save(); render(); }
+function udGripSVG(grip) {
+  const slot = { top: '<rect x="22" y="8" width="26" height="8" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', bottom: '<rect x="22" y="80" width="26" height="8" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', left: '<rect x="8" y="40" width="8" height="20" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>', right: '<rect x="54" y="40" width="8" height="20" rx="4" fill="#c9b08a" stroke="#6b4a2e"/>' }[grip] || '';
+  return `<svg viewBox="0 0 70 96" width="70" height="96"><rect x="4" y="4" width="62" height="88" rx="2" fill="#fff" stroke="#6b4a2e" stroke-width="1.5"/>${slot}</svg>`;
+}
+function udCard(it, parts) {
+  UD_SEL = UD_SEL && UD_SEL.id === it.id ? UD_SEL : null;
+  const g = udGeo(it, parts);
+  if (!g) return `<h2>Unit drawing</h2><div class="card small muted">To draw the unit, add W, H and D sizes under Sizes (or give the parts sizes).</div>`;
+  const sel = udSel(it), sp = sel != null ? it.parts[sel] : null, pl = sp ? parts.find(p => p.i === sel) : null, m = sp ? (mat(sp.matId) || {}) : {}, solid = udSolid(m);
+  const ts = [...new Set([16, 17, 18, 19, 22, 25, 32, ...S.settings.materials.map(x => +x.t)].filter(x => x > 0))].sort((a, b) => a - b);
+  const detail = sp && pl ? `<div style="border-top:1px solid var(--line);margin-top:10px;padding-top:10px">
+      <div class="row" style="align-items:center"><b>${esc(pl.name)}</b><span class="small muted">${pl.L} × ${pl.W} mm × ${m.t || '?'} mm · ${esc(m.name || 'no board')}</span></div>
+      <div class="row" style="align-items:center;margin-top:6px">
+        <label>Part type <select onchange="itemSet('parts.${sel}.role',this.value)">${udRoleOpts(sp.role)}</select></label>
+        <label style="margin-left:10px">Material <select style="max-width:220px" onchange="itemSet('parts.${sel}.matId',this.value)">${S.settings.materials.map(x => `<option value="${x.id}" ${x.id === sp.matId ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <label style="margin-left:10px"><input type="checkbox" ${solid ? 'checked' : ''} onchange="udSetSolid(${sel},this.checked)"> Solid wood</label>
+        <label style="margin-left:10px">Thickness <select onchange="udSetThick(${sel},+this.value)">${ts.map(t => `<option value="${t}" ${t === +m.t ? 'selected' : ''}>${t} mm</option>`).join('')}</select></label>
+      </div>
+      <p class="small muted" style="margin:6px 0 0">Thickness changes the board only. Sizes do not change by themselves: if a side gets thicker, change the shelf and top/bottom lengths in the Parts table.</p></div>`
+    : `<p class="small muted" style="margin:10px 0 0">Click a part in the drawing to select it, then change its part type, make it solid wood or change its thickness.</p>`;
+  const th = udThk(it), nd = it.dividers || 0, nb = it.battens || 0;
+  const span = Math.round(g.W - 2 * th.side), sugg = Math.max(0, Math.ceil(span / UD_MAX_SPAN) - 1);
+  const opts = (max, cur) => Array.from({ length: max + 1 }, (_, v) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${v === 0 ? 'None' : v}</option>`).join('');
+  const thkSel = (k, l) => { const list = [...new Set([...UD_THK_OPTS, th[k]])].sort((x, y) => x - y);
+    return `<label>${l} <select onchange="udSetT('${k}',this.value)">${list.map(v => `<option value="${v}" ${v === th[k] ? 'selected' : ''}>${v} mm</option>`).join('')}</select></label>`; };
+  const divRow = `<div style="margin-top:10px"><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap">${thkSel('side', 'Sides')}${thkSel('tb', 'Top &amp; bottom')}${thkSel('div', 'Vertical dividers')}${thkSel('bat', 'Horizontal battens')}</div>
+    <div class="row" style="align-items:center;margin-top:8px"><label>Vertical dividers <select id="udDiv">${opts(8, nd)}</select></label><button class="small" onclick="udSetSupport('divider', document.getElementById('udDiv').value)">✓ Add dividers</button></div>
+    <div class="row" style="align-items:center;margin-top:6px"><label>Horizontal battens <select id="udBat">${opts(8, nb)}</select></label><button class="small" onclick="udSetSupport('batten', document.getElementById('udBat').value)">✓ Add battens</button></div>
+    <p class="small muted" style="margin:6px 0 0">Span between the sides: ${span} mm (max ${UD_MAX_SPAN} mm) → ${sugg === 0 ? 'no dividers needed' : sugg + ' divider(s) suggested'}.<br>Divider: ${Math.round(g.H - 2 * th.tb)} × ${Math.round(g.D)} mm, ${th.div} mm thick. Batten: ${Math.round(g.W - 2 * th.side)} × ${Math.round(g.D)} mm, ${th.bat} mm thick. Set the side board in the Parts table to the same thickness as the sides chosen here.</p></div>`;
+  const fr = it.fronts || { mode: 'doors', n: 0 }, gp = udGaps(it);
+  const fronts = parts.filter(p => p.auto === 'front');
+  const numOpts = (max, cur) => Array.from({ length: max + 1 }, (_, v) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${v === 0 ? 'None' : v}</option>`).join('');
+  const frontCtl = `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><h3 style="margin:0 0 6px">Fronts and grain</h3>
+    <div class="row" style="align-items:center;gap:12px;flex-wrap:wrap">
+      <label>Fronts <select onchange="udSetFronts(this.value, ${fr.n})"><option value="doors" ${fr.mode === 'doors' ? 'selected' : ''}>Doors</option><option value="drawers" ${fr.mode === 'drawers' ? 'selected' : ''}>Drawer fronts</option></select></label>
+      <label>${fr.mode === 'drawers' ? 'Drawers stacked' : 'Doors across'} <select onchange="udSetFronts('${fr.mode}', this.value)">${numOpts(8, fr.n)}</select></label>
+      <label>Front thickness <select onchange="udSetT('front',this.value)">${[...new Set([...UD_THK_OPTS, udThk(it).front])].sort((x, y) => x - y).map(v => `<option value="${v}" ${v === udThk(it).front ? 'selected' : ''}>${v} mm</option>`).join('')}</select></label>
+      <label>Grain <select onchange="udSetGrain(this.value)"><option value="none" ${(it.grain || 'none') === 'none' ? 'selected' : ''}>Not set</option><option value="up" ${it.grain === 'up' ? 'selected' : ''}>Runs up and down</option><option value="across" ${it.grain === 'across' ? 'selected' : ''}>Runs left to right</option></select></label>
+    </div>
+    <div class="row" style="align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">${UD_GAPS.map(([k, l]) => `<label class="small">${l} <input type="number" value="${gp[k]}" style="width:62px" onchange="udSetGap('${k}',this.value)"> mm</label>`).join('')}</div>
+    ${fronts.some(p => p.grip === 'top') ? `<div class="row" style="align-items:center;gap:10px;margin-top:6px"><label class="small">Finger grip rail height <input type="number" value="${it.downstand || 100}" style="width:70px" onchange="udSetDownstand(this.value)"> mm</label><span class="small muted">A rail under the top, between the sides, behind the door top. 100 mm is a placeholder: enter your size.</span></div>` : ''}
+    <p class="small muted" style="margin:6px 0 0">Doors are sized from the overall width and height minus these gaps. Grained parts keep their grain direction on the sheet, so the cutting list only turns them across the grain when there is no grain set.</p>
+    ${fronts.length ? fronts.map(p => `<div class="row" style="align-items:center;gap:14px;border-top:1px solid var(--line);padding:8px 0">${udGripSVG(p.grip || 'none')}<div style="flex:1"><b>${esc(p.name)}</b><div class="small">${p.L} × ${p.W} mm${p.grain ? ' · grain ' + (it.swapped ? 'left to right' : 'up and down') : ''}</div>
+      <label class="small">Finger grip <select onchange="udSetGrip(${p.i},this.value)">${UD_GRIPS.map(([v, l]) => `<option value="${v}" ${(p.grip || 'none') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div></div>`).join('') : '<p class="small muted">Choose the number of doors or drawer fronts above to size them from the gaps.</p>'}
+  </div>`;
+  return `<h2>Unit drawing</h2><div class="card">
+    <p class="small muted noprint" style="margin-top:0">Front, side and depth views built from the parts list. Solid wood parts are drawn in timber colour. Clicking a part selects it.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
+      ${[['Front', 'front'], ['Side (depth)', 'side'], ['Plan (from above)', 'plan']].map(([t, k]) => `<div><div class="small muted">${t}</div>${udSVG(k, g)}</div>`).join('')}
+    </div>${divRow}${frontCtl}${detail}</div>`;
+}
+
+/* ============ Catalogues: upload a supplier PDF, search it, read chosen pages into a fittings library ============ */
+const CAT = () => S.settings.catalogues = S.settings.catalogues || [];
+const CAT_DOC = {}, CAT_TEXT = {};      // PDF handles and page text live in this browser session only (the PDF is never stored in the database)
+const catOf = () => CAT().find(c => c.id === V.catId);
+function catSet(path, v) { const c = catOf(); if (!c) return; const ks = path.split('.'); let o = c; ks.slice(0, -1).forEach(k => o = o[k]); o[ks.at(-1)] = v; save(); render(); }
+async function catUpload(files) {
+  const f = files && files[0]; if (!f) return;
+  V.busy = true; V.catMsg = 'Opening the catalogue…'; render();
+  try {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, texts = [];
+    for (let n = 1; n <= pdf.numPages; n++) { V.catMsg = `Reading text, page ${n} of ${pdf.numPages}…`; const tc = await (await pdf.getPage(n)).getTextContent(); texts.push(tc.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()); }
+    const c = { id: uid(), supplier: '', name: f.name.replace(/\.pdf$/i, ''), pages: pdf.numPages, entries: [] };
+    CAT().unshift(c); CAT_DOC[c.id] = pdf; CAT_TEXT[c.id] = texts; V.catId = c.id; save();
+    const blank = texts.filter(t => !t).length;
+    V.catMsg = `✔ ${pdf.numPages} page(s) opened.` + (blank > pdf.numPages / 2 ? ' Most pages have no searchable text (scanned) — you can still read a page with AI.' : ' Search the catalogue below, then read the pages you need.');
+  } catch (e) { V.catMsg = 'Could not open the catalogue: ' + e.message; }
+  V.busy = false; render();
+}
+async function catReopen(files) {   // the same PDF again after a page reload: re-read the text, no new library entry
+  const f = files && files[0], c = catOf(); if (!f || !c) return;
+  V.busy = true; V.catMsg = 'Re-opening…'; render();
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise, texts = [];
+    for (let n = 1; n <= pdf.numPages; n++) { const tc = await (await pdf.getPage(n)).getTextContent(); texts.push(tc.items.map(i => i.str).join(' ').replace(/\s+/g, ' ').trim()); }
+    CAT_DOC[c.id] = pdf; CAT_TEXT[c.id] = texts; V.catMsg = `✔ Re-opened ${pdf.numPages} page(s).`;
+  } catch (e) { V.catMsg = 'Could not re-open: ' + e.message; }
+  V.busy = false; render();
+}
+async function catPageImage(pdf, n) {
+  const pg = await pdf.getPage(n), v0 = pg.getViewport({ scale: 1 }), sc = Math.min(2, 1600 / Math.max(v0.width, v0.height)), vp = pg.getViewport({ scale: sc });
+  const cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height; const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height);
+  await pg.render({ canvasContext: x, viewport: vp }).promise; return cv.toDataURL('image/jpeg', 0.8);
+}
+async function catReadPage(n) {
+  const c = catOf(); if (!c) return;
+  const pdf = CAT_DOC[c.id]; if (!pdf) { V.catMsg = 'Re-open the catalogue PDF first (Choose PDF again).'; render(); return; }
+  if (!aiKey()) { V.catMsg = CLOUD && !isRoot() ? 'AI reading is not switched on yet — ask the administrator.' : 'Add the AI key in Settings → AI photo reading first.'; render(); return; }
+  n = +n; if (!(n >= 1 && n <= c.pages)) { V.catMsg = 'Choose a page between 1 and ' + c.pages + '.'; render(); return; }
+  V.busy = true; V.catMsg = `Reading page ${n}…`; render();
+  const prompt = `You are reading one page of a South African cabinet hardware supplier's catalogue (page ${n}) for a cabinet maker. List every product on this page that a cabinet maker needs: runners, drawer sides, hinges, cups, brackets, fixings and similar.
+For each product give the part number exactly as printed, a short description, the kind (runner, drawer side, hinge, bracket, fixing, other), the key printed specs (nominal lengths, heights, load ratings, opening angle, overlay/inset type, drilling or installation distances) and any note about which front, door or carcass thickness it suits. Use ONLY what is printed on the page. If something is not shown, leave it empty. Do not guess numbers.
+Reply with ONLY JSON: {"items":[{"code":"","desc":"","kind":"","specs":"","suits":""}]}`;
+  try {
+    const img = (await catPageImage(pdf, n)).split(',')[1];
+    const model = await pickModel(); let txt = '';
+    if (aiProvider() === 'anthropic') {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ model, max_tokens: 3000, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img } }, { type: 'text', text: prompt }] }] }) });
+      const j = await resp.json(); if (!resp.ok) throw new Error(j.error?.message || ('HTTP ' + resp.status));
+      txt = (j.content || []).filter(x => x.type === 'text').map(x => x.text).join('');
+    } else {
+      const resp = await gFetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        JSON.stringify({ contents: [{ role: 'user', parts: [{ inline_data: { mime_type: 'image/jpeg', data: img } }, { text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }));
+      const j = await resp.json(); if (!resp.ok) throw new Error(gErr(j, resp.status));
+      txt = ((j.candidates || [])[0]?.content?.parts || []).map(p => p.text || '').join('');
+    }
+    const js = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    const items = (js.items || []).filter(x => x && (x.code || x.desc));
+    items.forEach(x => c.entries.push({ id: uid(), page: n, code: String(x.code || '').slice(0, 40), desc: String(x.desc || '').slice(0, 160), kind: String(x.kind || '').slice(0, 30), specs: String(x.specs || '').slice(0, 300), suits: String(x.suits || '').slice(0, 200), ok: false }));
+    save(); V.catMsg = `✔ Page ${n}: ${items.length} product(s) found. Check each one against the page, then tick it.`;
+  } catch (e) { V.catMsg = 'AI could not read page ' + n + ': ' + e.message; }
+  V.busy = false; render();
+}
+function catEntry(id, ok) { const c = catOf(); const e = c && c.entries.find(x => x.id === id); if (!e) return; if (ok === 'del') c.entries = c.entries.filter(x => x.id !== id); else e.ok = ok; save(); render(); }
+function catHits(c, q) {
+  const texts = CAT_TEXT[c.id] || [], s = String(q || '').trim().toLowerCase(); if (!s) return [];
+  const out = []; texts.forEach((t, i) => { const k = t.toLowerCase().indexOf(s); if (k >= 0) out.push({ n: i + 1, snip: t.slice(Math.max(0, k - 70), k + s.length + 90) }); });
+  return out;
+}
+function viewCatalogues() {
+  const list = CAT(), c = catOf(), hits = c && V.catQ ? catHits(c, V.catQ) : [];
+  const msg = V.catMsg ? `<div class="msg ai small noprint">${esc(V.catMsg)}</div>` : '';
+  return `${asBanner()}<h1>Catalogues</h1>
+  <p class="muted" style="margin-top:-6px">Upload a supplier's catalogue PDF here. It stays on this PC; only the page you choose is sent to the AI to read. Search the catalogue, read the pages you need, then tick the products that are right. Only ticked products go into the fittings library.</p>
+  <div class="card noprint"><div class="row"><label class="btn primary" style="color:#fff;background:var(--accent);border-color:var(--accent)">📚 Upload a catalogue PDF<input type="file" accept="application/pdf" style="display:none" onchange="catUpload(this.files)"></label>
+    ${c ? `<label class="btn small">Choose the PDF again (after a reload)<input type="file" accept="application/pdf" style="display:none" onchange="catReopen(this.files)"></label>` : ''}</div>
+    ${V.busy ? '<p><span class="spinner"></span> Working…</p>' : ''}${msg}</div>
+  ${list.length ? `<div class="row noprint" style="margin-top:8px">${list.map(x => `<button class="small ${c && x.id === c.id ? 'primary' : ''}" onclick="V.catId='${x.id}';V.catQ='';V.catMsg='';render()">${esc(x.name)}</button>`).join('')}</div>` : '<p class="muted">No catalogues yet.</p>'}
+  ${c ? `<div class="card" style="margin-top:10px">
+    <div class="row" style="align-items:center"><h2 style="margin:0;margin-right:auto">${esc(c.name)}</h2><span class="small muted">${c.pages} pages</span></div>
+    <label>Supplier</label><select onchange="catSet('supplier',this.value)">${['', 'Blum', 'Grass', 'Häfele', 'Other'].map(v => `<option value="${v}" ${c.supplier === v ? 'selected' : ''}>${v || '— choose —'}</option>`).join('')}</select>
+    <div class="row noprint" style="margin-top:10px"><input placeholder="Search the catalogue, e.g. runner, hinge, 770M" value="${esc(V.catQ || '')}" style="flex:1" onchange="V.catQ=this.value;render()">
+      <label>Read page <input type="number" min="1" max="${c.pages}" id="catPg" style="width:70px"></label><button class="small" onclick="catReadPage(document.getElementById('catPg').value)">🤖 Read page with AI</button></div>
+    ${V.catQ ? `<div class="small muted" style="margin-top:6px">${hits.length} page(s) mention “${esc(V.catQ)}”${CAT_TEXT[c.id] ? '' : ' (re-open the PDF to search)'}</div>` : ''}
+    ${hits.slice(0, 40).map(h => `<div class="row" style="align-items:flex-start;border-top:1px solid var(--line);padding:6px 0"><b style="min-width:60px">p.${h.n}</b><span class="small" style="flex:1">…${esc(h.snip)}…</span><button class="small" onclick="catReadPage(${h.n})">Read</button></div>`).join('')}
+    <h3>Products found</h3>
+    ${c.entries.length ? `<div class="tablewrap"><table><tr><th>✔</th><th>Page</th><th>Part no.</th><th>Description</th><th>Kind</th><th>Key specs</th><th>Suits</th><th></th></tr>
+      ${c.entries.map(e => `<tr style="${e.ok ? '' : 'opacity:.75'}"><td><input type="checkbox" ${e.ok ? 'checked' : ''} onchange="catEntry('${e.id}',this.checked)"></td><td>${e.page}</td><td><b>${esc(e.code)}</b></td><td>${esc(e.desc)}</td><td class="small">${esc(e.kind)}</td><td class="small">${esc(e.specs)}</td><td class="small">${esc(e.suits)}</td><td><button class="small danger" onclick="catEntry('${e.id}','del')">✕</button></td></tr>`).join('')}
+      </table></div>` : '<p class="muted small">Nothing read yet. Search, then press Read on a page.</p>'}
+    <div class="row" style="margin-top:10px"><button class="danger small" onclick="if(confirm('Remove this catalogue and all its products from the library?')){S.settings.catalogues=CAT().filter(x=>x.id!==V.catId);V.catId=null;delete CAT_DOC[c.id];delete CAT_TEXT[c.id];save();render()}">Remove this catalogue</button></div>
+  </div>` : ''}`;
+}
+
 /* ============ Drawings: bring in a design drawing, change the sizes, get the cutting list ============ */
 function ITEMS() { return S.settings.items = S.settings.items || []; }
 const IT = () => ITEMS().find(x => x.id === V.item);
@@ -1914,6 +2236,7 @@ async function importDrawing(files) {
   V.busy = false; save(); render();
 }
 async function aiReadDrawing(it, imgs) {
+  if (!aiKey()) { V.itMsg = CLOUD && !isRoot() ? 'AI reading is not switched on yet — ask the administrator. You can add the sizes and parts by hand below.' : 'No AI key yet — paste it in Settings → AI photo reading' + (CLOUD ? ' — company key' : '') + ', press Test key, then try again.'; return; }
   imgs = imgs || (it.files || []).map(itemFile).filter(Boolean);
   if (!imgs.length) { V.itMsg = 'No drawing to read.'; return; }
   const prompt = `You are reading a cabinet maker's / shopfitter's design drawing (often hand drawn and scanned). Turn it into a PARAMETRIC cutting list so the sizes can be changed later.
@@ -1996,9 +2319,10 @@ function viewItem() {
       <button class="small noprint" style="margin-top:6px" onclick="IT().params.push({k:'X'+(IT().params.length+1),label:'',v:0});save();render()">+ Add size</button>
       <label style="margin-top:8px">Notes</label><textarea rows="3" style="width:100%" onchange="itemSet('notes',this.value,false)">${esc(it.notes || '')}</textarea></div>
   </div>
+  ${udCard(it, parts)}
   <h2>Parts</h2><div class="card"><p class="small muted noprint" style="margin-top:0">Length, width and qty can be a number or a formula with the size letters, e.g. <b>H</b>, <b>W-2*S-6</b>, <b>S+G-17</b>. The worked-out size shows underneath.</p>
     <div class="tablewrap"><table><tr><th>Part</th><th>Qty</th><th>Length</th><th>Width</th><th>Board</th><th>Edging</th><th>Long</th><th>Short</th><th>Grain</th><th class="noprint"></th></tr>
-    ${parts.map((p, i) => `<tr${p.bad ? ' style="background:#3d2424"' : ''}><td><input value="${esc(it.parts[i].name || '')}" style="width:150px" onchange="itemSet('parts.${i}.name',this.value)">${p.note ? `<div class="small muted">${esc(p.note)}</div>` : ''}</td>
+    ${parts.map((p, i) => `<tr${p.bad ? ' style="background:#3d2424"' : ''}><td><input value="${esc(it.parts[i].name || '')}" style="width:150px" onchange="itemSet('parts.${i}.name',this.value)"><select style="max-width:150px;margin-top:3px" onchange="itemSet('parts.${i}.role',this.value)">${udRoleOpts(it.parts[i].role)}</select>${p.note ? `<div class="small muted">${esc(p.note)}</div>` : ''}</td>
       ${['qty', 'L', 'W'].map(k => `<td><input value="${esc(it.parts[i][k])}" style="width:${k === 'qty' ? 55 : 110}px" onchange="itemSet('parts.${i}.${k}',this.value.trim())"><div class="small" style="color:${p.bad ? 'var(--bad)' : 'var(--accent2)'}">= ${isFinite(p[k]) ? p[k] : '?'}</div></td>`).join('')}
       <td><select style="max-width:190px" onchange="itemSet('parts.${i}.matId',this.value)">${matOpts(p.matId)}</select></td>
       <td><select style="max-width:150px" onchange="itemSet('parts.${i}.edge',this.value)">${edgeOpts(p.edge)}</select></td>
@@ -2100,6 +2424,7 @@ function aiCompanyCard() {
 }
 async function testKey() {
   const el = $('#keyMsg'); el.innerHTML = '<span class="spinner"></span> Checking…';
+  if (!aiKey()) { el.innerHTML = '<div class="msg warn">Paste the key in the box first, click outside the box, then press Test key.</div>'; return; }
   try { const m = await pickModel(true); V.keyMsg = `<div class="msg ok">Key works. Using model ${esc(m)}.</div>`; }
   catch (e) { V.keyMsg = `<div class="msg bad">${esc(e.message)}</div>`; }
   render(); setTimeout(() => { V.keyMsg = ''; }, 100);
