@@ -1907,7 +1907,7 @@ function udGeo(it, parts) {
   if (!(W > 0 && H > 0 && D > 0)) return null;
   const tOf = x => x ? +(mat(x.p.matId) || {}).t || 0 : 0;
   const T = tOf(sides[0]) || tOf(tops[0]) || 18, Tb = tOf(backs[0]) || 6, Td = tOf(doors[0]) || T;
-  return { W, H, D, T, Tb, Td, sides, tops, backs, shelves, doors, drawers, dividers: by('divider'), splits: (it.splits && it.splits.length) ? it.splits : null, cleat: udCleat(it), returnD: +it.returnDepth || 0 };
+  return { W, H, D, T, Tb, Td, sides, tops, backs, shelves, doors, drawers, dividers: by('divider'), splits: (it.splits && it.splits.length) ? it.splits : null, cleat: udCleat(it), returnD: +it.returnDepth || 0, gapMM: it.shadowGap == null ? 3 : +it.shadowGap };
 }
 function udZones(g) {   // vertical zones inside the carcass: drawers on top, doors/shelves below
   const iy0 = g.T, iy1 = g.H - g.T, ih = iy1 - iy0, hasD = g.doors.length > 0, hasR = g.drawers.length > 0;
@@ -1929,7 +1929,11 @@ function udFront(g) {
   if (tops[1]) s += udRect(T, H - T, W - 2 * T, T, pp(tops[1]));
   udShelfYs(g).forEach((y, j) => { s += udRect(T, y - T / 2, W - 2 * T, T, pp(shelves[j])); });
   g.dividers.forEach((x, j) => { const xc = T + (W - 2 * T) * (j + 1) / (g.dividers.length + 1); s += udRect(xc - T / 2, T, T, H - 2 * T, pp(x)); });
-  if (g.splits) { let c = T; g.splits.slice(0, -1).forEach(v => { c += v; s += udRect(c - g.cleat.w / 2, (H - g.cleat.h) / 2, g.cleat.w, g.cleat.h, { fill: '#e6d3b3', dash: true, title: 'Joint cleat (behind)' }); s += udRect(c - 1, 0, 2, H, { fill: '#6b4a2e', title: 'Panel joint' }); }); }
+  if (g.splits) {   // panels laid left to right, a shadow gap between each pair, cleats (hidden) dashed behind each joint
+    const gp = g.gapMM; let x = 0;
+    g.splits.forEach((v, i) => { s += udRect(x, 0, v, H, { title: `Panel ${i + 1} (${v} mm)` }); x += v; if (i < g.splits.length - 1) { s += udRect(x, 0, gp, H, { fill: '#3a2e22', title: `Shadow gap ${gp} mm` }); x += gp; } });
+    x = 0; g.splits.slice(0, -1).forEach(v => { x += v; s += udRect(x + gp / 2 - g.cleat.w / 2, (H - g.cleat.h) / 2, g.cleat.w, g.cleat.h, { fill: '#e6d3b3', dash: true, title: 'Joint cleat (behind)' }); x += gp; });
+  }
   if (z.hasR) { const dh = z.dz / drawers.length;
     drawers.forEach((x, k) => { const y = z.iy0 + k * dh; s += udRect(0, y + 2, W, dh - 4, pp(x)) + udHdl(W / 2 - W * 0.07, y + dh / 2, W / 2 + W * 0.07, y + dh / 2); }); }
   if (z.hasD) { const nd = doors.length, dw = W / nd, y0 = z.dy0, y1 = g.H - g.T;
@@ -1953,16 +1957,19 @@ function udPlan(g) {
   if (sides[0]) s += udRect(0, y0, T, D - Tb, pp(sides[0])) + udRect(W - T, y0, T, D - Tb, pp(sides[1] || sides[0]));
   if (tops[0]) s += udRect(T, y0, W - 2 * T, D - Tb, pp(tops[0]));
   g.dividers.forEach((x, j) => { const xc = T + (W - 2 * T) * (j + 1) / (g.dividers.length + 1); s += udRect(xc - T / 2, y0, T, D - Tb, pp(x)); });
-  if (g.splits) { let c = T; g.splits.slice(0, -1).forEach(v => { c += v; s += udRect(c - 1, y0, 2, D - Tb, { fill: '#6b4a2e', title: 'Panel joint' }); }); }
+  if (g.splits) {
+    const gp = g.gapMM; let x = 0;
+    g.splits.forEach((v, i) => { s += udRect(x, y0, v, D - Tb, { title: `Panel ${i + 1} (${v} mm)` }); x += v; if (i < g.splits.length - 1) { s += udRect(x, y0, gp, D - Tb, { fill: '#3a2e22', title: `Shadow gap ${gp} mm` }); x += gp; } });
+  }
   if (doors.length) { const dw = W / doors.length; doors.forEach((x, k) => { s += udRect(k * dw, D - Td, dw, Td, pp(x)); }); }
   return s;
 }
-function udChain(kind, g, fs, pad) {   // the panel widths along the top of the front and top views, as on the drawing
+function udChain(kind, g, fs, pad) {   // each panel's width along the top of the front and top views
   if (!g.splits || kind === 'side') return '';
-  let c = g.T, out = '';
-  g.splits.forEach(v => { out += `<text x="${c + v / 2}" y="${-pad * 0.35}" font-size="${fs}" text-anchor="middle" fill="#333">${r0(v)}</text>`; c += v; });
-  const inside = Math.round(g.W - 2 * g.T), sum = Math.round(g.splits.reduce((a, b) => a + b, 0));
-  if (sum !== inside) out += `<text x="${g.W / 2}" y="${-pad * 0.8}" font-size="${fs}" text-anchor="middle" fill="#b00">Panels add up to ${sum}, the inside width is ${inside}</text>`;
+  const gp = g.gapMM; let c = 0, out = '';
+  g.splits.forEach(v => { out += `<text x="${c + v / 2}" y="${-pad * 0.35}" font-size="${fs}" text-anchor="middle" fill="#333">${r0(v)}</text>`; c += v + gp; });
+  const total = Math.round(g.splits.reduce((a, b) => a + b, 0) + (g.splits.length - 1) * gp);
+  if (total !== Math.round(g.W)) out += `<text x="${g.W / 2}" y="${-pad * 0.8}" font-size="${fs}" text-anchor="middle" fill="#b00">Panels and gaps add up to ${total}, overall width is ${Math.round(g.W)}</text>`;
   return out;
 }
 function udSVG(kind, g) {
@@ -2041,6 +2048,7 @@ function udBuildExtras(it) {   // joint cleats (one per joint) and end returns, 
 }
 function udSetCleat(key, v) { const it = IT(); if (!it) return; it.cleat = udCleat(it); it.cleat[key] = +v || 0; udBuildExtras(it); save(); render(); }
 function udSetReturn(v) { const it = IT(); if (!it) return; it.returnDepth = Math.max(0, +v || 0); udBuildExtras(it); save(); render(); }
+function udSetShadow(v) { const it = IT(); if (!it) return; it.shadowGap = Math.max(0, +v || 0); save(); render(); }
 function udSetSplits(v) { const it = IT(); if (!it) return; it.splits = String(v || '').split(/[\s,+]+/).map(Number).filter(x => x > 0); udBuildExtras(it); save(); render(); }
 function udSetFronts(mode, n) { const it = IT(); if (!it) return; it.fronts = { mode, n: Math.max(0, Math.min(8, +n || 0)) }; udBuildFronts(it); save(); render(); }
 function udSetGap(k, v) { const it = IT(); if (!it) return; it.gaps = { ...udGaps(it), [k]: Math.max(0, +v || 0) }; if (it.fronts && it.fronts.n) udBuildFronts(it); save(); render(); }
@@ -2087,7 +2095,7 @@ function udCard(it, parts) {
   const thkSel = (k, l) => { const list = [...new Set([...UD_THK_OPTS, th[k]])].sort((x, y) => x - y);
     return `<label>${l} <select onchange="udSetT('${k}',this.value)">${list.map(v => `<option value="${v}" ${v === th[k] ? 'selected' : ''}>${v} mm</option>`).join('')}</select></label>`; };
   const divRow = `<div style="margin-top:10px"><div class="row" style="align-items:center;gap:12px;flex-wrap:wrap">${thkSel('side', 'Sides')}${thkSel('tb', 'Top &amp; bottom')}${thkSel('div', 'Vertical dividers')}${thkSel('bat', 'Horizontal battens')}</div>
-    <div class="row" style="align-items:center;margin-top:8px"><label>Panel widths (mm, left to right) <input value="${splitsTxt}" placeholder="e.g. 686, 2010, 686" style="width:200px" onchange="udSetSplits(this.value)"></label><span class="small muted">Joints between panels, shown on the views.</span></div>
+    <div class="row" style="align-items:center;margin-top:8px"><label>Panel widths (mm, left to right) <input value="${splitsTxt}" placeholder="e.g. 686, 2010, 686" style="width:200px" onchange="udSetSplits(this.value)"></label><label class="small">Shadow gap <input type="number" value="${it.shadowGap == null ? 3 : it.shadowGap}" style="width:60px" onchange="udSetShadow(this.value)"> mm</label><span class="small muted">Panel widths are measured left to right, with the shadow gap between each pair.</span></div>
     <div class="row" style="align-items:center;margin-top:8px;gap:10px;flex-wrap:wrap"><label class="small">Joint cleat height <input type="number" value="${udCleat(it).h}" style="width:70px" onchange="udSetCleat('h',this.value)"></label><label class="small">width <input type="number" value="${udCleat(it).w}" style="width:70px" onchange="udSetCleat('w',this.value)"></label><label class="small">thickness <input type="number" value="${udCleat(it).t}" style="width:60px" onchange="udSetCleat('t',this.value)"></label><label class="small">End return depth <input type="number" value="${it.returnDepth || 0}" style="width:70px" onchange="udSetReturn(this.value)"></label><span class="small muted">Cleats sit on the back at each joint. Returns are the end panels, 0 = none.</span></div>
     <div class="row" style="align-items:center;margin-top:8px"><label>Vertical dividers <select id="udDiv">${opts(8, nd)}</select></label><button class="small" onclick="udSetSupport('divider', document.getElementById('udDiv').value)">✓ Add dividers</button></div>
     <div class="row" style="align-items:center;margin-top:6px"><label>Horizontal battens <select id="udBat">${opts(8, nb)}</select></label><button class="small" onclick="udSetSupport('batten', document.getElementById('udBat').value)">✓ Add battens</button></div>
