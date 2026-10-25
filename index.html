@@ -2442,7 +2442,7 @@ function viewItem() {
         <td class="noprint"><button class="small danger" onclick="IT().params.splice(${i},1);save();render()">✕</button></td></tr>`).join('')}</table></div>
       <button class="small noprint" style="margin-top:6px" onclick="IT().params.push({k:'X'+(IT().params.length+1),label:'',v:0});save();render()">+ Add size</button>
       <label style="margin-top:8px">Notes</label><textarea rows="3" style="width:100%" onchange="itemSet('notes',this.value,false)">${esc(it.notes || '')}</textarea></div>
-    <div class="card"><h3 style="margin-top:0">Cupboard drawing</h3>${udRefViews(it, parts)}</div>
+    <div class="card"><h3 style="margin-top:0">Cupboard drawing</h3><p class="small muted">The full drawing, with the panels, shadow gaps, cleats and fronts, is in the <b>Unit drawing</b> section further down this page.</p></div>
   </div>
   ${udCard(it, parts)}
   <h2>Parts</h2><div class="card"><p class="small muted noprint" style="margin-top:0">Length, width and qty can be a number or a formula with the size letters, e.g. <b>H</b>, <b>W-2*S-6</b>, <b>S+G-17</b>. The worked-out size shows underneath.</p>
